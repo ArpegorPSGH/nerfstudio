@@ -68,12 +68,14 @@ class SpacedSampler(Sampler):
         num_samples: Optional[int] = None,
         train_stratified=True,
         single_jitter=False,
+        include_bounds=False,
     ) -> None:
         super().__init__(num_samples=num_samples)
         self.train_stratified = train_stratified
         self.single_jitter = single_jitter
         self.spacing_fn = spacing_fn
         self.spacing_fn_inv = spacing_fn_inv
+        self.include_bounds = include_bounds
 
     def generate_ray_samples(
         self,
@@ -101,6 +103,8 @@ class SpacedSampler(Sampler):
 
         # TODO More complicated than it needs to be.
         if self.train_stratified and self.training:
+            if self.include_bounds:
+                bins = torch.linspace(0.0, 1.0, num_samples - 1).to(ray_bundle.origins.device)[None, ...]  # [1, num_samples-1]
             if self.single_jitter:
                 t_rand = torch.rand((num_rays, 1), dtype=bins.dtype, device=bins.device)
             else:
@@ -109,12 +113,12 @@ class SpacedSampler(Sampler):
             bin_upper = torch.cat([bin_centers, bins[..., -1:]], -1)
             bin_lower = torch.cat([bins[..., :1], bin_centers], -1)
             bins = bin_lower + (bin_upper - bin_lower) * t_rand
+            if self.include_bounds:
+                bins = torch.nn.functional.pad(bins, pad=(1, 0))
+                bins = torch.nn.functional.pad(bins, pad=(0, 1), value=1)
 
-        s_near, s_far = (self.spacing_fn(x) for x in (ray_bundle.nears, ray_bundle.fars))
-
-        def spacing_to_euclidean_fn(x):
-            return self.spacing_fn_inv(x * s_far + (1 - x) * s_near)
-
+        s_near, s_far = (self.spacing_fn(x) for x in (ray_bundle.nears.clone(), ray_bundle.fars.clone()))
+        spacing_to_euclidean_fn = lambda x: self.spacing_fn_inv(x * s_far + (1 - x) * s_near)
         euclidean_bins = spacing_to_euclidean_fn(bins)  # [num_rays, num_samples+1]
 
         ray_samples = ray_bundle.get_ray_samples(
@@ -142,6 +146,7 @@ class UniformSampler(SpacedSampler):
         num_samples: Optional[int] = None,
         train_stratified=True,
         single_jitter=False,
+        include_bounds=False,
     ) -> None:
         super().__init__(
             num_samples=num_samples,
@@ -149,6 +154,7 @@ class UniformSampler(SpacedSampler):
             spacing_fn_inv=lambda x: x,
             train_stratified=train_stratified,
             single_jitter=single_jitter,
+            include_bounds=include_bounds,
         )
 
 
@@ -785,3 +791,87 @@ class NeuSSampler(Sampler):
         )
 
         return ray_samples, sorted_index
+
+class AbsorptionSampler(Sampler):
+    """Absorption sampler that uses a sdf network to generate samples with fixed variance value in each iterations."""
+
+    def __init__(
+        self,
+        num_samples: int = 64,
+        num_samples_importance: int = 64,
+        num_samples_outside: int = 32,
+        num_upsample_steps: int = 4,
+        base_variance: float = 64,
+        single_jitter: bool = True,
+        include_bounds: bool = True,
+    ) -> None:
+        super().__init__()
+        self.num_samples = num_samples
+        self.num_samples_importance = num_samples_importance
+        self.num_samples_outside = num_samples_outside
+        self.num_upsample_steps = num_upsample_steps
+        self.base_variance = base_variance
+        self.single_jitter = single_jitter
+        self.include_bounds = include_bounds
+
+        # samplers
+        self.uniform_sampler = UniformSampler(single_jitter=single_jitter, include_bounds=include_bounds)
+        self.pdf_sampler = PDFSampler(
+            include_original=False,
+            single_jitter=single_jitter,
+            histogram_padding=1e-5,
+        )
+        self.outside_sampler = LinearDisparitySampler()
+        self.neus_sampler = NeuSSampler()
+
+    def generate_ray_samples(
+        self,
+        ray_bundle: Optional[RayBundle] = None,
+        sdf_fn: Optional[Callable[[RaySamples], torch.Tensor]] = None,
+        ray_samples: Optional[RaySamples] = None,
+    ) -> Union[Tuple[RaySamples, torch.Tensor], RaySamples]:
+        assert ray_bundle is not None
+        assert sdf_fn is not None
+
+        # Start with uniform sampling
+        if ray_samples is None:
+            ray_samples = self.uniform_sampler(ray_bundle, num_samples=self.num_samples)
+        assert ray_samples is not None
+
+        total_iters = 0
+        sorted_index = None
+        sdf: Optional[torch.Tensor] = None
+        new_samples = ray_samples
+
+        base_variance = self.base_variance
+
+        while total_iters < self.num_upsample_steps:
+            with torch.no_grad():
+                new_sdf = sdf_fn(new_samples)
+
+            # merge sdf predictions
+            if sorted_index is not None:
+                assert sdf is not None
+                sdf_merge = torch.cat([sdf.squeeze(-1), new_sdf.squeeze(-1)], -1)
+                sdf = torch.gather(sdf_merge, 1, sorted_index).unsqueeze(-1)
+            else:
+                sdf = new_sdf
+
+            # compute with fix variances
+            s=1/(base_variance * 2**total_iters)
+            weights = s*torch.exp(s*sdf)/(1 + torch.exp(s*sdf))**2
+
+            weights = torch.cat((weights, torch.zeros_like(weights[:, :1])), dim=1)
+
+            new_samples = self.pdf_sampler(
+                ray_bundle,
+                ray_samples,
+                weights,
+                num_samples=self.num_samples_importance // self.num_upsample_steps,
+            )
+
+            ray_samples, sorted_index = self.neus_sampler.merge_ray_samples(ray_bundle, ray_samples, new_samples)
+
+            total_iters += 1
+
+        return ray_samples
