@@ -65,6 +65,14 @@ class Frustums(TensorDataclass):
         """
         return self.origins + self.directions * self.starts
 
+    def get_end_positions(self) -> Float[Tensor, "*batch 3"]:
+        """Calculates "end" position of frustum.
+
+        Returns:
+            xyz positions.
+        """
+        return self.origins + self.directions * self.ends
+
     def set_offsets(self, offsets):
         """Sets offsets for this frustum for computing positions"""
         self.offsets = offsets

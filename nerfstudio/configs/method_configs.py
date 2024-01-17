@@ -566,7 +566,7 @@ method_configs["absorption-model-v1"] = TrainerConfig(
             train_num_rays_per_batch=1024,
             eval_num_rays_per_batch=1024,
         ),
-        model=AbsorptionModelConfig(eval_num_rays_per_chunk=1024),
+        model=AbsorptionModelConfig(eval_num_rays_per_chunk=1024, mat_absorption=1e6, def_absorption=1, pixel_size=1e-3),
     ),
     optimizers={
         "fields": {

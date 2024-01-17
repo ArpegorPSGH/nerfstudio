@@ -798,7 +798,7 @@ class AbsorptionSampler(Sampler):
     def __init__(
         self,
         num_samples: int = 64,
-        num_samples_importance: int = 64,
+        num_samples_importance_per_step: int = 64,
         num_samples_outside: int = 32,
         num_upsample_steps: int = 4,
         base_variance: float = 64,
@@ -807,7 +807,7 @@ class AbsorptionSampler(Sampler):
     ) -> None:
         super().__init__()
         self.num_samples = num_samples
-        self.num_samples_importance = num_samples_importance
+        self.num_samples_importance_per_step = num_samples_importance_per_step
         self.num_samples_outside = num_samples_outside
         self.num_upsample_steps = num_upsample_steps
         self.base_variance = base_variance
@@ -858,8 +858,8 @@ class AbsorptionSampler(Sampler):
                 sdf = new_sdf
 
             # compute with fix variances
-            s=1/(base_variance * 2**total_iters)
-            weights = s*torch.exp(s*sdf)/(1 + torch.exp(s*sdf))**2
+            sigma=1/(base_variance * 2**total_iters)
+            weights = sigma*torch.exp(sigma*sdf)/(1 + torch.exp(sigma*sdf))**2
 
             weights = torch.cat((weights, torch.zeros_like(weights[:, :1])), dim=1)
 
@@ -867,7 +867,7 @@ class AbsorptionSampler(Sampler):
                 ray_bundle,
                 ray_samples,
                 weights,
-                num_samples=self.num_samples_importance // self.num_upsample_steps,
+                num_samples=self.num_samples_importance_per_step,
             )
 
             ray_samples, sorted_index = self.neus_sampler.merge_ray_samples(ray_bundle, ray_samples, new_samples)

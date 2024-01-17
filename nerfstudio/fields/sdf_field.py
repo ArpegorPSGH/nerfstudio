@@ -344,6 +344,40 @@ class SDFField(Field):
     def get_density(self, ray_samples: RaySamples):
         raise NotImplementedError
 
+    def get_absorption(
+            self,
+            sdf: Float[Tensor, "num_samples ... 1"],
+            mat_absorption: Float[Tensor, "1"],
+            def_absorption: Float[Tensor, "1"],
+        ) -> Float[Tensor, "num_samples ... 1"]:
+        """compute absorption"""
+        sigma = self.deviation_network.get_variance()
+        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(sigma * sdf)) + def_absorption
+        return absorption
+
+    def get_initial_intensity(
+            self,
+            ray_samples: RaySamples,
+            def_absorption: Float[Tensor, "1"],
+            source_intensity: Float[Tensor, "1"],
+            source_diameter: Float[Tensor, "1"],
+            source_position: Float[Tensor, "1 ... 3"],
+            pixel_size: Float[Tensor, "1"],
+        ) -> Float[Tensor, "num_samples ... 1"]:
+        """compute initial intensities of the rays"""
+
+        # compute vectors between end of rays and source position
+        a = ray_samples.frustums.get_end_positions()
+        b = ray_samples.frustums.get_end_positions().unsqueeze(2)[:,-1]
+        vectors = ray_samples.frustums.get_end_positions().unsqueeze(2)[:,-1] - source_position.view(1,1,3)
+        # compute projection of vectors on rays directions (distances along rays)
+        directions = ray_samples.frustums.directions
+        distances = torch.abs((vectors*directions).sum(axis=2)/(directions**2).sum(axis=2)).unsqueeze(-1)
+
+        initial_intensities = source_intensity*pixel_size**2/(torch.pi*(source_diameter/2)**2)*torch.exp(-def_absorption*distances)
+
+        return initial_intensities
+
     def get_colors(
         self,
         points: Float[Tensor, "*batch 3"],
@@ -399,6 +433,15 @@ class SDFField(Field):
         ray_samples: RaySamples,
         density_embedding: Optional[Tensor] = None,
         return_alphas: bool = False,
+        mid_points: bool = False,
+        return_absorption: bool = False,
+        mat_absorption: Float = 0,
+        def_absorption: Float = 0,
+        return_initial_intensity: bool = False,
+        source_intensity: Float = 1,
+        source_diameter: Float = 1,
+        source_position: Optional[Float[Tensor, "3"]] = None,
+        pixel_size: Float = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """compute output of ray samples"""
         if ray_samples.camera_indices is None:
@@ -408,7 +451,10 @@ class SDFField(Field):
 
         camera_indices = ray_samples.camera_indices.squeeze()
 
-        inputs = ray_samples.frustums.get_start_positions()
+        if mid_points:
+            inputs = ray_samples.frustums.get_positions()
+        else:
+            inputs = ray_samples.frustums.get_start_positions()
         inputs = inputs.view(-1, 3)
 
         directions = ray_samples.frustums.directions
@@ -443,10 +489,30 @@ class SDFField(Field):
             alphas = self.get_alpha(ray_samples, sdf, gradients)
             outputs.update({FieldHeadNames.ALPHA: alphas})
 
+        if return_absorption:
+            absorption = self.get_absorption(sdf, mat_absorption, def_absorption)
+            outputs.update({FieldHeadNames.ABSORPTION: absorption})
+
+        if return_initial_intensity:
+            initial_intensity = self.get_initial_intensity(ray_samples, def_absorption, source_intensity, source_diameter, source_position, pixel_size)
+            outputs.update({FieldHeadNames.INITIAL_INTENSITY: initial_intensity})
+
         return outputs
 
     def forward(
-        self, ray_samples: RaySamples, compute_normals: bool = False, return_alphas: bool = False
+        self,
+        ray_samples: RaySamples,
+        compute_normals: bool = False,
+        return_alphas: bool = False,
+        mid_points: bool = False,
+        return_absorption: bool = False,
+        mat_absorption: Float = 1,
+        def_absorption: Float = 0,
+        return_initial_intensity: bool = False,
+        source_intensity: Float = 1,
+        source_diameter: Float = 1,
+        source_position: Optional[Float[Tensor, "3"]] = None,
+        pixel_size: Float = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """Evaluates the field at points along the ray.
 
@@ -455,5 +521,17 @@ class SDFField(Field):
             compute normals: not currently used in this implementation.
             return_alphas: Whether to return alpha values
         """
-        field_outputs = self.get_outputs(ray_samples, return_alphas=return_alphas)
+        source_position = torch.tensor(source_position, device=ray_samples.deltas.device)
+        field_outputs = self.get_outputs(ray_samples,
+                                         return_alphas=return_alphas,
+                                         mid_points=mid_points,
+                                         return_absorption=return_absorption,
+                                         mat_absorption=mat_absorption,
+                                         def_absorption=def_absorption,
+                                         return_initial_intensity=return_initial_intensity,
+                                         source_intensity=source_intensity,
+                                         source_diameter=source_diameter,
+                                         source_position=source_position,
+                                         pixel_size=pixel_size,
+                                         )
         return field_outputs

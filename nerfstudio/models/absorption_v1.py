@@ -39,14 +39,26 @@ class AbsorptionModelConfig(SurfaceModelConfig):
     _target: Type = field(default_factory=lambda: AbsorptionModel)
     num_samples: int = 64
     """Number of uniform samples"""
-    num_samples_importance: int = 64
-    """Number of importance samples"""
+    num_samples_importance_per_step: int = 16
+    """Number of importance samples per step"""
     num_up_sample_steps: int = 4
-    """number of up sample step, 1 for simple coarse-to-fine sampling"""
+    """Number of up sample step, 1 for simple coarse-to-fine sampling"""
     base_variance: float = 64
-    """fixed base variance in NeuS sampler, the inv_s will be base * 2 ** iter during upsample"""
+    """Fixed base variance in NeuS sampler, the inv_s will be base * 2 ** iter during upsample"""
     perturb: bool = True
-    """use to use perturb for the sampled points"""
+    """Use to use perturb for the sampled points"""
+    mat_absorption: float = 1
+    """Absorption constant of the object's material"""
+    def_absorption: float = 0
+    """Absorption constant outside of the object"""
+    source_intensity: float = 1
+    """Total intensity of the ray source"""
+    source_diameter: float = 1
+    """Diameter of the ray source"""
+    source_position: tuple = (0,0,0)
+    """3D position of the ray source"""
+    pixel_size: float = 1
+    """Pixel size of the sensor"""
 
 
 class AbsorptionModel(SurfaceModel):
@@ -64,12 +76,18 @@ class AbsorptionModel(SurfaceModel):
 
         self.sampler = AbsorptionSampler(
             num_samples=self.config.num_samples,
-            num_samples_importance=self.config.num_samples_importance,
+            num_samples_importance_per_step=self.config.num_samples_importance_per_step,
             num_samples_outside=self.config.num_samples_outside,
             num_upsample_steps=self.config.num_up_sample_steps,
             base_variance=self.config.base_variance,
         )
 
+        self.mat_absorption = self.config.mat_absorption
+        self.def_absorption = self.config.def_absorption
+        self.source_intensity = self.config.source_intensity
+        self.source_diameter = self.config.source_diameter
+        self.source_position = self.config.source_position
+        self.pixel_size = self.config.pixel_size
         self.anneal_end = 50000
 
     def get_training_callbacks(
@@ -95,17 +113,22 @@ class AbsorptionModel(SurfaceModel):
 
     def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict:
         ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf)
-        field_outputs = self.field(ray_samples, mid_points=True)
-        weights, transmittance = ray_samples.get_weights_and_transmittance_from_alphas(
-            field_outputs[FieldHeadNames.ALPHA]
+        field_outputs = self.field(
+            ray_samples,
+            mid_points=True,
+            return_absorption=True,
+            mat_absorption=self.mat_absorption,
+            def_absorption=self.def_absorption,
+            return_initial_intensity=True,
+            source_intensity=self.source_intensity,
+            source_diameter=self.source_diameter,
+            source_position=self.source_position,
+            pixel_size=self.pixel_size,
         )
-        bg_transmittance = transmittance[:, -1, :]
 
         samples_and_field_outputs = {
             "ray_samples": ray_samples,
             "field_outputs": field_outputs,
-            "weights": weights,
-            "bg_transmittance": bg_transmittance,
         }
         return samples_and_field_outputs
 
