@@ -367,12 +367,10 @@ class SDFField(Field):
         """compute initial intensities of the rays"""
 
         # compute vectors between end of rays and source position
-        a = ray_samples.frustums.get_end_positions()
-        b = ray_samples.frustums.get_end_positions().unsqueeze(2)[:,-1]
-        vectors = ray_samples.frustums.get_end_positions().unsqueeze(2)[:,-1] - source_position.view(1,1,3)
+        vectors = ray_samples.frustums.get_end_positions()[:,-1] - source_position.view(1,3)
         # compute projection of vectors on rays directions (distances along rays)
-        directions = ray_samples.frustums.directions
-        distances = torch.abs((vectors*directions).sum(axis=2)/(directions**2).sum(axis=2)).unsqueeze(-1)
+        directions = ray_samples.frustums.directions[:,-1]
+        distances = torch.abs((vectors*directions).sum(axis=1)/(directions**2).sum(axis=1)).unsqueeze(-1)
 
         initial_intensities = source_intensity*pixel_size**2/(torch.pi*(source_diameter/2)**2)*torch.exp(-def_absorption*distances)
 
@@ -495,7 +493,7 @@ class SDFField(Field):
 
         if return_initial_intensity:
             initial_intensity = self.get_initial_intensity(ray_samples, def_absorption, source_intensity, source_diameter, source_position, pixel_size)
-            outputs.update({FieldHeadNames.INITIAL_INTENSITY: initial_intensity})
+            outputs.update({FieldHeadNames.INTENSITY: initial_intensity})
 
         return outputs
 

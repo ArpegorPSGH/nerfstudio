@@ -445,3 +445,33 @@ class NormalsRenderer(nn.Module):
         if normalize:
             n = safe_normalize(n)
         return n
+
+class AbsorptionRenderer(nn.Module):
+    """Volumetric absorption rendering"""
+    def __init__(self) -> None:
+        super().__init__()
+    def forward(
+        self,
+        initial_intensity: Float[Tensor, "*bs num_samples 1"],
+        absorption: Float[Tensor, "*bs num_samples 1"],
+        samples_width: Float[Tensor, "*bs num_samples 1"],
+    ) -> Float[Tensor, "*bs 3"]:
+        """Composite samples along ray and render intensity image
+
+        Args:
+            initial_intensity: Initial intensity for each sample
+            absorption: Absorption for each sample
+            samples_width: Size of each sample along ray
+
+        Returns:
+            Outputs of intensity values.
+        """
+
+        if not self.training:
+            initial_intensity = torch.nan_to_num(initial_intensity)
+        a = torch.sum(absorption*samples_width, dim=1)
+        b = absorption*samples_width
+        intensity = initial_intensity*torch.exp(-torch.sum(absorption*samples_width, dim=1))
+        if not self.training:
+            torch.clamp_(intensity, min=0.0, max=1.0)
+        return intensity

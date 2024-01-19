@@ -42,7 +42,7 @@ class FieldHeadNames(Enum):
     ALPHA = "alpha"
     GRADIENT = "gradient"
     ABSORPTION = "absorption"
-    INITIAL_INTENSITY = "initial_intensity"
+    INTENSITY = "intensity"
 
 class FieldHead(FieldComponent):
     """Base field output

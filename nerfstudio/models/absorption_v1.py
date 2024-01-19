@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Type
 
+import torch
+
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.engine.callbacks import (
     TrainingCallback,
@@ -29,11 +31,11 @@ from nerfstudio.engine.callbacks import (
 )
 from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.model_components.ray_samplers import AbsorptionSampler
-from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
+from nerfstudio.models.base_volume_model import VolumeModel, VolumeModelConfig
 
 
 @dataclass
-class AbsorptionModelConfig(SurfaceModelConfig):
+class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption Model Config"""
 
     _target: Type = field(default_factory=lambda: AbsorptionModel)
@@ -61,7 +63,7 @@ class AbsorptionModelConfig(SurfaceModelConfig):
     """Pixel size of the sensor"""
 
 
-class AbsorptionModel(SurfaceModel):
+class AbsorptionModel(VolumeModel):
     """Absorption model
 
     Args:
@@ -126,9 +128,12 @@ class AbsorptionModel(SurfaceModel):
             pixel_size=self.pixel_size,
         )
 
+        dummy_weights = torch.ones_like(field_outputs[FieldHeadNames.ABSORPTION])
+
         samples_and_field_outputs = {
             "ray_samples": ray_samples,
             "field_outputs": field_outputs,
+            "weights": dummy_weights,
         }
         return samples_and_field_outputs
 
