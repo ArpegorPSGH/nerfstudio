@@ -546,9 +546,10 @@ method_configs["absorption-model-v1"] = TrainerConfig(
     method_name="absorption-model-v1",
     steps_per_eval_image=500,
     steps_per_eval_batch=5000,
-    steps_per_save=20000,
+    steps_per_save=2000,
+    save_only_latest_checkpoint=False,
     steps_per_eval_all_images=1000000,  # set to a very large number so we don't eval with all images
-    max_num_iterations=100000,
+    max_num_iterations=20001,
     mixed_precision=False,
     pipeline=VanillaPipelineConfig(
         datamanager=VanillaDataManagerConfig(
@@ -557,7 +558,7 @@ method_configs["absorption-model-v1"] = TrainerConfig(
             train_num_rays_per_batch=1024,
             eval_num_rays_per_batch=1024,
         ),
-        model=AbsorptionModelConfig(eval_num_rays_per_chunk=1024, mat_absorption=1e2, def_absorption=1e-2, pixel_size=1e-3),
+        model=AbsorptionModelConfig(eval_num_rays_per_chunk=1024, mat_absorption=1e1, source_power=3, source_position=(0, 0, -1), pixel_size=2e-4),
     ),
     optimizers={
         "fields": {

@@ -53,8 +53,8 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption constant of the object's material"""
     def_absorption: float = 0
     """Absorption constant outside of the object"""
-    source_intensity: float = 1
-    """Total intensity of the ray source"""
+    source_power: float = 1
+    """Total power of the ray source"""
     source_diameter: float = 1
     """Diameter of the ray source"""
     source_position: tuple = (0,0,0)
@@ -86,7 +86,7 @@ class AbsorptionModel(VolumeModel):
 
         self.mat_absorption = self.config.mat_absorption
         self.def_absorption = self.config.def_absorption
-        self.source_intensity = self.config.source_intensity
+        self.source_power = self.config.source_power
         self.source_diameter = self.config.source_diameter
         self.source_position = self.config.source_position
         self.pixel_size = self.config.pixel_size
@@ -121,8 +121,8 @@ class AbsorptionModel(VolumeModel):
             return_absorption=True,
             mat_absorption=self.mat_absorption,
             def_absorption=self.def_absorption,
-            return_initial_intensity=True,
-            source_intensity=self.source_intensity,
+            return_initial_power=True,
+            source_power=self.source_power,
             source_diameter=self.source_diameter,
             source_position=self.source_position,
             pixel_size=self.pixel_size,
@@ -134,6 +134,7 @@ class AbsorptionModel(VolumeModel):
             "ray_samples": ray_samples,
             "field_outputs": field_outputs,
             "weights": dummy_weights,
+            "pixel_size": self.pixel_size,
         }
         return samples_and_field_outputs
 

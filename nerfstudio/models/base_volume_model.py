@@ -77,13 +77,18 @@ class VolumeModel(SurfaceModel):
         ray_samples = samples_and_field_outputs["ray_samples"]
         weights = samples_and_field_outputs["weights"]
 
-        intensity = self.renderer_absorption(
-            initial_intensity=field_outputs[FieldHeadNames.INTENSITY],
+        power = self.renderer_absorption(
+            initial_power=field_outputs[FieldHeadNames.POWER],
             absorption=field_outputs[FieldHeadNames.ABSORPTION],
             samples_width=ray_samples.deltas
         )
 
-        intensity = intensity.expand(-1, 3)
+        # convert power to intensity
+        pixel_size = samples_and_field_outputs["pixel_size"]
+        intensity = power/pixel_size**2
+
+        # convert intensity to Blender pixel value
+        value = torch.clip(intensity * 0.25, min=0, max=1).expand(-1, 3)
 
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         # the rendered depth is point-to-point distance and we should convert to depth
@@ -93,7 +98,7 @@ class VolumeModel(SurfaceModel):
         accumulation = self.renderer_accumulation(weights=weights)
 
         outputs = {
-            "rgb": intensity,
+            "rgb": value,
             "accumulation": accumulation,
             "depth": depth,
             "normal": normal,

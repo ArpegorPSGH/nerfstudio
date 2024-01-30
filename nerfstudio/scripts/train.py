@@ -225,7 +225,7 @@ def launch(
 
 def main(config: TrainerConfig) -> None:
     """Main function."""
-
+    torch.autograd.set_detect_anomaly(True)
     if config.data:
         CONSOLE.log("Using --data alias for --data.pipeline.datamanager.data")
         config.pipeline.datamanager.data = config.data
