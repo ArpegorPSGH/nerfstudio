@@ -103,8 +103,6 @@ class SpacedSampler(Sampler):
 
         # TODO More complicated than it needs to be.
         if self.train_stratified and self.training:
-            if self.include_bounds:
-                bins = torch.linspace(0.0, 1.0, num_samples - 1).to(ray_bundle.origins.device)[None, ...]  # [1, num_samples-1]
             if self.single_jitter:
                 t_rand = torch.rand((num_rays, 1), dtype=bins.dtype, device=bins.device)
             else:
@@ -114,8 +112,8 @@ class SpacedSampler(Sampler):
             bin_lower = torch.cat([bins[..., :1], bin_centers], -1)
             bins = bin_lower + (bin_upper - bin_lower) * t_rand
             if self.include_bounds:
-                bins = torch.nn.functional.pad(bins, pad=(1, 0))
-                bins = torch.nn.functional.pad(bins, pad=(0, 1), value=1)
+                bins[...,0] = 0
+                bins[...,-1] = 1
 
         s_near, s_far = (self.spacing_fn(x) for x in (ray_bundle.nears.clone(), ray_bundle.fars.clone()))
         spacing_to_euclidean_fn = lambda x: self.spacing_fn_inv(x * s_far + (1 - x) * s_near)

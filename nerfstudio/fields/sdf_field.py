@@ -351,7 +351,8 @@ class SDFField(Field):
             def_absorption: Float[Tensor, "1"],
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute absorption"""
-        sigma = 1/self.deviation_network.get_variance()
+        sigma = self.deviation_network.get_variance()
+        print("sigma=", sigma)
         absorption = (mat_absorption - def_absorption) / (1 + torch.exp(sigma * sdf)) + def_absorption
         return absorption
 

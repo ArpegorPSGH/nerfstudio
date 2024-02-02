@@ -122,7 +122,7 @@ class SDFStudio(DataParser):
         scene_box = SceneBox(
             aabb=aabb,
         )
-
+        camera_type = CameraType[meta["camera_model"]]
         height, width = meta["height"], meta["width"]
         cameras = Cameras(
             fx=fx,
@@ -132,14 +132,13 @@ class SDFStudio(DataParser):
             height=height,
             width=width,
             camera_to_worlds=camera_to_worlds[:, :3, :4],
-            camera_type=CameraType.PERSPECTIVE,
+            camera_type=camera_type
         )
 
         # TODO supports downsample
         # cameras.rescale_output_resolution(scaling_factor=1.0 / self.config.downscale_factor)
         if self.config.include_mono_prior:
             assert meta["has_mono_prior"], f"no mono prior in {self.config.data}"
-
         dataparser_outputs = DataparserOutputs(
             image_filenames=image_filenames,
             cameras=cameras,
@@ -152,6 +151,9 @@ class SDFStudio(DataParser):
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,
                 "include_mono_prior": self.config.include_mono_prior,
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
+                "near": meta_scene_box["near"],
+                "far": meta_scene_box["far"],
+                "collider_type": meta_scene_box["collider_type"],
             },
         )
         return dataparser_outputs

@@ -469,8 +469,7 @@ class AbsorptionRenderer(nn.Module):
 
         if not self.training:
             initial_power = torch.nan_to_num(initial_power)
-        a = torch.sum(absorption*samples_width, dim=1)
-        b = absorption*samples_width
+
         power = initial_power * torch.exp(-torch.sum(absorption * samples_width, dim=1))
         if not self.training:
             torch.clamp_(power, min=0.0, max=1.0)

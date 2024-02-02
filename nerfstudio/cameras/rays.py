@@ -212,7 +212,7 @@ class RayBundle(TensorDataclass):
     nears: Optional[Float[Tensor, "*batch 1"]] = None
     """Distance along ray to start sampling"""
     fars: Optional[Float[Tensor, "*batch 1"]] = None
-    """Rays Distance along ray to stop sampling"""
+    """Distance along ray to stop sampling"""
     metadata: Dict[str, Shaped[Tensor, "num_rays latent_dims"]] = field(default_factory=dict)
     """Additional metadata or data needed for interpolation, will mimic shape of rays"""
     times: Optional[Float[Tensor, "*batch 1"]] = None

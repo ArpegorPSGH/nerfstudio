@@ -28,6 +28,7 @@ from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.field_components.field_heads import FieldHeadNames
 
 from nerfstudio.model_components.renderers import AbsorptionRenderer
+from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
 from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
 
 
@@ -51,7 +52,16 @@ class VolumeModel(SurfaceModel):
     def populate_modules(self):
         """Set the fields and modules."""
         super().populate_modules()
-
+        metadata = self.kwargs["metadata"]
+        collider_type = metadata["collider_type"]
+        if collider_type == 'near_far':
+            self.collider = NearFarCollider(near_plane=metadata["near"], far_plane=metadata["far"])
+        elif collider_type == 'box':
+            self.collider = AABBBoxCollider(self.scene_box)
+        elif collider_type == 'sphere':
+            self.collider = SphereCollider(center=metadata["center"], radius=metadata["radius"])
+        else:
+            raise NotImplementedError("collider type not implemented")
         self.renderer_absorption = AbsorptionRenderer()
 
     def get_outputs(self, ray_bundle: RayBundle) -> Dict[str, torch.Tensor]:

@@ -224,6 +224,7 @@ def generate_mesh_with_multires_marching_cubes(
                 pts_sdf = evaluate_multiresolution_sdf(evaluate, points_pyramid, coarse_mask, x_max, x_min, crop_n)
 
                 z = pts_sdf.detach().cpu().numpy()
+                print(np.min(z), np.max(z))
 
                 # Skip if no surface found
                 if current_mask is not None:
