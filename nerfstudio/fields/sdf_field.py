@@ -55,7 +55,7 @@ class LearnedVariance(nn.Module):
 
     def get_variance(self) -> Float[Tensor, "1"]:
         """return current variance value"""
-        return torch.exp(self.variance * 10.0).clip(1e-6, 88)
+        return torch.exp(self.variance * 10.0)
 
 
 @dataclass
@@ -353,7 +353,8 @@ class SDFField(Field):
         """compute absorption"""
         sigma = self.deviation_network.get_variance()
         # print("sigma=", sigma)
-        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(sigma * torch.tanh(sdf))) + def_absorption
+        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf))) + def_absorption
+        # print("absorption min=", torch.min(absorption), "absorption max=", torch.max(absorption))
         # print("min=", torch.min(sigma * torch.tanh(sdf)), "max=", torch.max(sigma * torch.tanh(sdf)))
         return absorption
 

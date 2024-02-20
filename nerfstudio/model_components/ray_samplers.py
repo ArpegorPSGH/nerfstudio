@@ -857,7 +857,7 @@ class AbsorptionSampler(Sampler):
 
             # compute with fix variances
             sigma=1/(base_variance * 2**total_iters)
-            weights = sigma*torch.exp(sigma*torch.tanh(sdf))/(1 + torch.exp(sigma*torch.tanh(sdf)))**2
+            weights = sigma*torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf))/(1 + torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf)))**2
 
             weights = torch.cat((weights, torch.zeros_like(weights[:, :1])), dim=1)
 

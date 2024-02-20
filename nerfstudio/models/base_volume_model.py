@@ -93,12 +93,15 @@ class VolumeModel(SurfaceModel):
             samples_width=ray_samples.deltas
         )
 
+        # print(field_outputs[FieldHeadNames.SDF][0])
+
         # convert power to intensity
         pixel_size = samples_and_field_outputs["pixel_size"]
         intensity = power/pixel_size**2
 
         # convert intensity to Blender pixel value
         value = torch.clip(intensity * 0.25, min=0, max=1).expand(-1, 3)
+        # print("min value", torch.min(value), "max value", torch.max(value))
 
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         # the rendered depth is point-to-point distance and we should convert to depth
