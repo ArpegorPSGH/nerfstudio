@@ -94,6 +94,7 @@ class VolumeModel(SurfaceModel):
         )
 
         # print(field_outputs[FieldHeadNames.SDF][0])
+        # print(field_outputs[FieldHeadNames.ABSORPTION][0])
 
         # convert power to intensity
         pixel_size = samples_and_field_outputs["pixel_size"]

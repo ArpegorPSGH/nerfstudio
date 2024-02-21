@@ -471,6 +471,6 @@ class AbsorptionRenderer(nn.Module):
             initial_power = torch.nan_to_num(initial_power)
 
         power = initial_power * torch.exp(-torch.sum(absorption * samples_width, dim=1))
-        # print(absorption[0])
+
         # print("min absorption", torch.min(torch.sum(absorption * samples_width, dim=1)), "max absorption", torch.max(torch.sum(absorption * samples_width, dim=1)), "mean absorption", torch.mean(torch.sum(absorption * samples_width, dim=1)))
         return power

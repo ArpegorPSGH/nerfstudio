@@ -39,9 +39,9 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption Model Config"""
 
     _target: Type = field(default_factory=lambda: AbsorptionModel)
-    num_samples: int = 64
+    num_samples: int = 32
     """Number of uniform samples"""
-    num_samples_importance_per_step: int = 16
+    num_samples_importance_per_step: int = 8
     """Number of importance samples per step"""
     num_up_sample_steps: int = 4
     """Number of up sample step, 1 for simple coarse-to-fine sampling"""
@@ -49,7 +49,7 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Fixed base variance in NeuS sampler, the inv_s will be base * 2 ** iter during upsample"""
     perturb: bool = True
     """Use to use perturb for the sampled points"""
-    mat_absorption: float = 1
+    init_mat_absorption: float = 1
     """Absorption constant of the object's material"""
     def_absorption: float = 0
     """Absorption constant outside of the object"""
@@ -84,7 +84,6 @@ class AbsorptionModel(VolumeModel):
             base_variance=self.config.base_variance,
         )
 
-        self.mat_absorption = self.config.mat_absorption
         self.def_absorption = self.config.def_absorption
         self.source_power = self.config.source_power
         self.source_diameter = self.config.source_diameter
@@ -119,7 +118,6 @@ class AbsorptionModel(VolumeModel):
             ray_samples,
             mid_points=True,
             return_absorption=True,
-            mat_absorption=self.mat_absorption,
             def_absorption=self.def_absorption,
             return_initial_power=True,
             source_power=self.source_power,

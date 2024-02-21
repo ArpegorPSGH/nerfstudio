@@ -58,6 +58,27 @@ class LearnedVariance(nn.Module):
         return torch.exp(self.variance * 10.0)
 
 
+class LearnedMaterialAbsorptionCoefficient(nn.Module):
+    """Material absorption coefficient network in absorption model
+
+    Args:
+        init_val: initial value in absorption model Material absorption coefficient network
+    """
+
+    material_absorption_coefficient: Tensor
+
+    def __init__(self, init_val):
+        super().__init__()
+        self.register_parameter("material_absorption_coefficient", nn.Parameter(init_val * torch.ones(1), requires_grad=True))
+
+    def forward(self, x: Float[Tensor, "1"]) -> Float[Tensor, "1"]:
+        """Returns current material absorption coefficient value"""
+        return torch.ones([len(x), 1], device=x.device) * self.material_absorption_coefficient
+
+    def get_material_absorption_coefficient(self) -> Float[Tensor, "1"]:
+        """return current material absorption coefficient value"""
+        return self.material_absorption_coefficient
+
 @dataclass
 class SDFFieldConfig(FieldConfig):
     """SDF Field Config"""
@@ -91,6 +112,8 @@ class SDFFieldConfig(FieldConfig):
     """Normalization factor for multi-resolution grids"""
     beta_init: float = 0.1
     """Init learnable beta value for transformation of sdf to density"""
+    material_absorption_coef_init: float = 1
+    """Init learnable material absorption coefficient value for transformation of sdf to density"""
     encoding_type: Literal["hash", "periodic", "tensorf_vm"] = "hash"
     num_levels: int = 16
     """Number of encoding levels"""
@@ -174,6 +197,7 @@ class SDFField(Field):
 
         # deviation_network to compute alpha from sdf from NeuS
         self.deviation_network = LearnedVariance(init_val=self.config.beta_init)
+        self.material_absorption_coef_network = LearnedMaterialAbsorptionCoefficient(init_val=self.config.material_absorption_coef_init)
 
         # color network
         dims = [self.config.hidden_dim_color for _ in range(self.config.num_layers_color)]
@@ -347,13 +371,15 @@ class SDFField(Field):
     def get_absorption(
             self,
             sdf: Float[Tensor, "num_samples ... 1"],
-            mat_absorption: Float[Tensor, "1"],
             def_absorption: Float[Tensor, "1"],
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute absorption"""
         sigma = self.deviation_network.get_variance()
+        mat_absorption = self.material_absorption_coef_network.get_material_absorption_coefficient()
         # print("sigma=", sigma)
-        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf))) + def_absorption
+        # print("mat absorption", mat_absorption)
+        exponent = torch.minimum(torch.tensor(np.log(torch.finfo(sdf.dtype).max)*(1-torch.finfo(sdf.dtype).resolution), dtype=sdf.dtype, device=sdf.device), sigma * sdf)
+        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(exponent)) + def_absorption
         # print("absorption min=", torch.min(absorption), "absorption max=", torch.max(absorption))
         # print("min=", torch.min(sigma * torch.tanh(sdf)), "max=", torch.max(sigma * torch.tanh(sdf)))
         return absorption
@@ -436,13 +462,12 @@ class SDFField(Field):
         return_alphas: bool = False,
         mid_points: bool = False,
         return_absorption: bool = False,
-        mat_absorption: Float = 0,
-        def_absorption: Float = 0,
+        def_absorption: Float[Tensor, "1"] = 0,
         return_initial_power: bool = False,
-        source_power: Float = 1,
-        source_diameter: Float = 1,
+        source_power: Float[Tensor, "1"] = 1,
+        source_diameter: Float[Tensor, "1"] = 1,
         source_position: Optional[Float[Tensor, "3"]] = None,
-        pixel_size: Float = 1,
+        pixel_size: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """compute output of ray samples"""
         if ray_samples.camera_indices is None:
@@ -491,7 +516,7 @@ class SDFField(Field):
             outputs.update({FieldHeadNames.ALPHA: alphas})
 
         if return_absorption:
-            absorption = self.get_absorption(sdf, mat_absorption, def_absorption)
+            absorption = self.get_absorption(sdf, def_absorption)
             outputs.update({FieldHeadNames.ABSORPTION: absorption})
 
         if return_initial_power:
@@ -507,13 +532,12 @@ class SDFField(Field):
         return_alphas: bool = False,
         mid_points: bool = False,
         return_absorption: bool = False,
-        mat_absorption: Float = 1,
-        def_absorption: Float = 0,
+        def_absorption: Float[Tensor, "1"] = 0,
         return_initial_power: bool = False,
-        source_power: Float = 1,
-        source_diameter: Float = 1,
+        source_power: Float[Tensor, "1"] = 1,
+        source_diameter: Float[Tensor, "1"] = 1,
         source_position: Optional[Float[Tensor, "3"]] = None,
-        pixel_size: Float = 1,
+        pixel_size: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """Evaluates the field at points along the ray.
 
@@ -528,7 +552,6 @@ class SDFField(Field):
                                          return_alphas=return_alphas,
                                          mid_points=mid_points,
                                          return_absorption=return_absorption,
-                                         mat_absorption=mat_absorption,
                                          def_absorption=def_absorption,
                                          return_initial_power=return_initial_power,
                                          source_power=source_power,

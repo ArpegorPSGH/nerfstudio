@@ -558,7 +558,17 @@ method_configs["absorption-model-v1"] = TrainerConfig(
             train_num_rays_per_batch=1024,
             eval_num_rays_per_batch=1024,
         ),
-        model=AbsorptionModelConfig(eval_num_rays_per_chunk=1024, mat_absorption=1, source_power=12, source_diameter=2, source_position=(0, 0, -1), pixel_size=2e-3),
+        model=AbsorptionModelConfig(
+            sdf_field=SDFFieldConfig(
+                material_absorption_coef_init=1
+            ),
+            eval_num_rays_per_chunk=1024,
+            init_mat_absorption=1,
+            source_power=12,
+            source_diameter=2,
+            source_position=(0, 0, -1),
+            pixel_size=2e-4
+        ),
     ),
     optimizers={
         "fields": {
@@ -573,7 +583,6 @@ method_configs["absorption-model-v1"] = TrainerConfig(
     viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
     vis="viewer",
 )
-
 
 method_configs["neus-facto"] = TrainerConfig(
     method_name="neus-facto",
