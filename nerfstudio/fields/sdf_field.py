@@ -47,7 +47,7 @@ class LearnedVariance(nn.Module):
 
     def __init__(self, init_val):
         super().__init__()
-        self.register_parameter("variance", nn.Parameter(init_val * torch.ones(1), requires_grad=True))
+        self.register_parameter("variance", nn.Parameter(np.log(init_val)/10.0 * torch.ones(1), requires_grad=True))
 
     def forward(self, x: Float[Tensor, "1"]) -> Float[Tensor, "1"]:
         """Returns current variance value"""
@@ -69,15 +69,15 @@ class LearnedMaterialAbsorptionCoefficient(nn.Module):
 
     def __init__(self, init_val):
         super().__init__()
-        self.register_parameter("material_absorption_coefficient", nn.Parameter(init_val * torch.ones(1), requires_grad=True))
+        self.register_parameter("material_absorption_coefficient", nn.Parameter(np.log(init_val)/10.0 * torch.ones(1), requires_grad=True))
 
     def forward(self, x: Float[Tensor, "1"]) -> Float[Tensor, "1"]:
         """Returns current material absorption coefficient value"""
-        return torch.ones([len(x), 1], device=x.device) * self.material_absorption_coefficient
+        return torch.ones([len(x), 1], device=x.device) * torch.exp(self.material_absorption_coefficient * 10.0)
 
     def get_material_absorption_coefficient(self) -> Float[Tensor, "1"]:
         """return current material absorption coefficient value"""
-        return self.material_absorption_coefficient
+        return torch.exp(self.material_absorption_coefficient * 10.0)
 
 @dataclass
 class SDFFieldConfig(FieldConfig):

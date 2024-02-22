@@ -554,16 +554,20 @@ method_configs["absorption-model-v1"] = TrainerConfig(
     pipeline=VanillaPipelineConfig(
         datamanager=VanillaDataManagerConfig(
             _target=VanillaDataManager[SDFDataset],
-            dataparser=SDFStudioDataParserConfig(),
+            dataparser=SDFStudioDataParserConfig(
+                scene_scale=1.0,
+                auto_orient=False,
+            ),
             train_num_rays_per_batch=1024,
             eval_num_rays_per_batch=1024,
         ),
         model=AbsorptionModelConfig(
             sdf_field=SDFFieldConfig(
-                material_absorption_coef_init=1
+                inside_outside=False,
+                material_absorption_coef_init=1,
+                beta_init=100,
             ),
             eval_num_rays_per_chunk=1024,
-            init_mat_absorption=1,
             source_power=12,
             source_diameter=2,
             source_position=(0, 0, -1),

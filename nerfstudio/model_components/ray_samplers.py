@@ -20,6 +20,7 @@ from abc import abstractmethod
 from typing import Any, Callable, List, Optional, Protocol, Tuple, Union
 
 import torch
+import numpy as np
 from jaxtyping import Float
 from nerfacc import OccGridEstimator
 from torch import Tensor, nn
@@ -856,8 +857,9 @@ class AbsorptionSampler(Sampler):
                 sdf = new_sdf
 
             # compute with fix variances
-            sigma=1/(base_variance * 2**total_iters)
-            weights = sigma*torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf))/(1 + torch.exp(torch.minimum(torch.log(torch.tensor(torch.finfo(sdf.dtype).max, dtype=sdf.dtype, device=sdf.device)), sigma * sdf)))**2
+            sigma = base_variance * 2**total_iters
+            exponent = torch.minimum(torch.tensor(np.log(torch.finfo(sdf.dtype).max/sigma)*(1-torch.finfo(sdf.dtype).resolution), dtype=sdf.dtype, device=sdf.device), sigma * sdf)
+            weights = sigma*torch.exp(exponent)/(1 + torch.exp(exponent))**2
 
             weights = torch.cat((weights, torch.zeros_like(weights[:, :1])), dim=1)
 
