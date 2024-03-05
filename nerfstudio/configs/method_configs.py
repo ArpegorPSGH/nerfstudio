@@ -564,14 +564,15 @@ method_configs["absorption-model-v1"] = TrainerConfig(
         model=AbsorptionModelConfig(
             sdf_field=SDFFieldConfig(
                 inside_outside=False,
-                material_absorption_coef_init=1,
+                material_absorption_coef_init=15,
                 beta_init=100,
+                bias=1,
             ),
             eval_num_rays_per_chunk=1024,
             source_power=12,
             source_diameter=2,
             source_position=(0, 0, -1),
-            pixel_size=2e-4
+            pixel_size=2e-3
         ),
     ),
     optimizers={

@@ -290,11 +290,12 @@ class SurfaceModel(Model):
             gt_image=image,
         )
         loss_dict["rgb_loss"] = self.rgb_loss(image, pred_image)
+        print("rgb_loss :", loss_dict["rgb_loss"])
         if self.training:
             # eikonal loss
             grad_theta = outputs["eik_grad"]
             loss_dict["eikonal_loss"] = ((grad_theta.norm(2, dim=-1) - 1) ** 2).mean() * self.config.eikonal_loss_mult
-
+            print("eikonal_loss :", loss_dict["eikonal_loss"])
             # foreground mask loss
             if "fg_mask" in batch and self.config.fg_mask_loss_mult > 0.0:
                 fg_label = batch["fg_mask"].float().to(self.device)

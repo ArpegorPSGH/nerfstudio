@@ -148,7 +148,7 @@ class CosineDecaySchedulerConfig(SchedulerConfig):
     _target: Type = field(default_factory=lambda: CosineDecayScheduler)
     """target class to instantiate"""
     warm_up_end: int = 5000
-    """Iteration number where warmp ends"""
+    """Iteration number where warm up ends"""
     learning_rate_alpha: float = 0.05
     """Learning rate alpha value"""
     max_steps: int = 300000

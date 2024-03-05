@@ -30,7 +30,7 @@ from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.model_components.renderers import AbsorptionRenderer
 from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
 from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
-
+from nerfstudio.model_components.losses import L1Loss
 
 
 @dataclass
@@ -63,6 +63,32 @@ class VolumeModel(SurfaceModel):
         else:
             raise NotImplementedError("collider type not implemented")
         self.renderer_absorption = AbsorptionRenderer()
+
+    def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
+        """Computes and returns the losses dict.
+
+        Args:
+            outputs: the output to compute loss dict to
+            batch: ground truth batch corresponding to outputs
+            metrics_dict: dictionary of metrics, some of which we can use for loss
+        """
+        loss_dict = {}
+        image = batch["image"].to(self.device)
+        pred_image = outputs["rgb"]
+        init_intensity = outputs["initial_intensity"]
+        loss_dict["rgb_loss"] = self.absorption_loss(image, pred_image, init_intensity)
+        print("rgb_loss :", loss_dict["rgb_loss"])
+        if self.training:
+            # eikonal loss
+            grad_theta = outputs["eik_grad"]
+            loss_dict["eikonal_loss"] = ((grad_theta.norm(2, dim=-1) - 1) ** 2).mean() * self.config.eikonal_loss_mult
+            print("eikonal_loss :", loss_dict["eikonal_loss"])
+
+        return loss_dict
+
+    def absorption_loss(self, image, pred_image, init_intensity):
+        loss = self.rgb_loss(torch.log(image/init_intensity), torch.log(pred_image/init_intensity))
+        return loss
 
     def get_outputs(self, ray_bundle: RayBundle) -> Dict[str, torch.Tensor]:
         """Takes in a Ray Bundle and returns a dictionary of outputs.
@@ -99,10 +125,12 @@ class VolumeModel(SurfaceModel):
 
         # convert power to intensity
         pixel_size = samples_and_field_outputs["pixel_size"]
+        initial_intensity = field_outputs[FieldHeadNames.POWER]/pixel_size**2
         intensity = power/pixel_size**2
 
         # convert intensity to Blender pixel value
         value = torch.clip(intensity * 0.25, min=0, max=1).expand(-1, 3)
+        init_value = torch.clip(initial_intensity * 0.25, min=0, max=1).expand(-1, 3)
         # print("min value", torch.min(value), "max value", torch.max(value))
 
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
@@ -118,6 +146,7 @@ class VolumeModel(SurfaceModel):
             "depth": depth,
             "normal": normal,
             "weights": weights,
+            "initial_intensity": init_value,
             # used to scale z_vals for free space and sdf loss
             "directions_norm": ray_bundle.metadata["directions_norm"],
         }
