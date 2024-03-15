@@ -376,12 +376,8 @@ class SDFField(Field):
         """compute absorption"""
         sigma = self.deviation_network.get_variance()
         mat_absorption = self.material_absorption_coef_network.get_material_absorption_coefficient()
-        # print("sigma=", sigma)
-        # print("mat absorption", mat_absorption)
         exponent = torch.minimum(torch.tensor(np.log(torch.finfo(sdf.dtype).max)*(1-torch.finfo(sdf.dtype).resolution), dtype=sdf.dtype, device=sdf.device), sigma * sdf)
         absorption = (mat_absorption - def_absorption) / (1 + torch.exp(exponent)) + def_absorption
-        # print("absorption min=", torch.min(absorption), "absorption max=", torch.max(absorption))
-        # print("min=", torch.min(sigma * torch.tanh(sdf)), "max=", torch.max(sigma * torch.tanh(sdf)))
         return absorption
 
     def get_initial_power(

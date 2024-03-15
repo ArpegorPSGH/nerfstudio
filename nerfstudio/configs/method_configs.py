@@ -566,10 +566,11 @@ method_configs["absorption-model-v1"] = TrainerConfig(
         model=AbsorptionModelConfig(
             sdf_field=SDFFieldConfig(
                 inside_outside=False,
-                material_absorption_coef_init=15,
+                material_absorption_coef_init=1, #1/100 coeff best, inferior or equal in anycase
                 beta_init=100,
-                bias=1,
+                bias=0.2, #init size same magnitude object best (0.1 stuck at min absorption value, 1e-6, for 1cm cube)
             ),
+            eikonal_loss_mult=1,
             eval_num_rays_per_chunk=1024,
             source_power=12,
             source_diameter=2,
@@ -579,8 +580,8 @@ method_configs["absorption-model-v1"] = TrainerConfig(
     ),
     optimizers={
         "fields": {
-            "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
-            "scheduler": CosineDecaySchedulerConfig(warm_up_end=5000, learning_rate_alpha=0.05, max_steps=300000),
+            "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-15),
+            "scheduler": ExponentialDecaySchedulerConfig(warmup_steps=100, lr_final=1e-5, max_steps=10000),
         },
         "field_background": {
             "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),

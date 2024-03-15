@@ -39,13 +39,13 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption Model Config"""
 
     _target: Type = field(default_factory=lambda: AbsorptionModel)
-    num_samples: int = 16
+    num_samples: int = 32
     """Number of uniform samples"""
     num_samples_importance_per_step: int = 8
     """Number of importance samples per step"""
-    num_up_sample_steps: int = 6
+    num_up_sample_steps: int = 8
     """Number of up sample step, 1 for simple coarse-to-fine sampling"""
-    base_variance: float = 64
+    base_variance: float = 256
     """Fixed base variance in NeuS sampler, the inv_s will be base * 2 ** iter during upsample"""
     perturb: bool = True
     """Use to use perturb for the sampled points"""

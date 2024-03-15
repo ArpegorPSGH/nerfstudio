@@ -30,7 +30,7 @@ from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.model_components.renderers import AbsorptionRenderer
 from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
 from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
-from nerfstudio.model_components.losses import L1Loss
+from nerfstudio.model_components.losses import L1Loss, MSELoss
 
 
 @dataclass
@@ -63,6 +63,7 @@ class VolumeModel(SurfaceModel):
         else:
             raise NotImplementedError("collider type not implemented")
         self.renderer_absorption = AbsorptionRenderer()
+        self.rgb_loss = MSELoss()
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
         """Computes and returns the losses dict.
@@ -87,7 +88,13 @@ class VolumeModel(SurfaceModel):
         return loss_dict
 
     def absorption_loss(self, image, pred_image, init_intensity):
-        loss = self.rgb_loss(torch.log(image/init_intensity), torch.log(pred_image/init_intensity))
+        resolution = torch.tensor(torch.finfo(pred_image.dtype).resolution)
+        pixel_precision = torch.tensor(1/255) # Aller récupérer la profondeur au moment du loading de l'image
+        image_absorption = torch.log(torch.minimum(torch.maximum(image-torch.sign(image-pred_image)*torch.minimum(pixel_precision/2, torch.abs(image-pred_image)), resolution), init_intensity-resolution)/init_intensity)
+        pred_image_absorption = torch.log(torch.minimum(torch.maximum(pred_image, resolution), init_intensity-resolution)/init_intensity)
+        print(image_absorption.mean(), pred_image_absorption.mean())
+        loss = torch.maximum(image_absorption/pred_image_absorption, pred_image_absorption/image_absorption)**0.1-1
+        loss = loss.mean()
         return loss
 
     def get_outputs(self, ray_bundle: RayBundle) -> Dict[str, torch.Tensor]:
