@@ -170,6 +170,7 @@ events.out.*
 
 # Data
 /data
+/test_intensity
 
 # Misc
 old/
