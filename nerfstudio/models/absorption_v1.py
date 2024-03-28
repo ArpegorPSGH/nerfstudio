@@ -90,6 +90,7 @@ class AbsorptionModel(VolumeModel):
         self.source_position = self.config.source_position
         self.pixel_size = self.config.pixel_size
         self.anneal_end = 50000
+        self.field_scaling = self.kwargs["metadata"]["sdf_field_scaling"]
 
     def get_training_callbacks(
         self, training_callback_attributes: TrainingCallbackAttributes
@@ -124,6 +125,7 @@ class AbsorptionModel(VolumeModel):
             source_diameter=self.source_diameter,
             source_position=self.source_position,
             pixel_size=self.pixel_size,
+            field_scaling=self.field_scaling
         )
 
         dummy_weights = torch.ones_like(field_outputs[FieldHeadNames.ABSORPTION])

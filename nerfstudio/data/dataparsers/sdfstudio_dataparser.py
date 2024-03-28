@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Type
@@ -27,6 +28,25 @@ from nerfstudio.data.dataparsers.base_dataparser import DataParser, DataParserCo
 from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.utils.io import load_from_json
 
+@dataclass
+class DataparserOutputs(DataparserOutputs):
+
+    def save_dataparser_transform(self, path: Path):
+        """Save dataparser transform to json file. Some dataparsers will apply a transform to the poses,
+        this method allows the transform to be saved so that it can be used in other applications.
+
+        Args:
+            path: path to save transform to
+        """
+        data = {
+            "transform": self.dataparser_transform.tolist(),
+            "scale": float(self.dataparser_scale),
+            "sdf_field_scaling": float(self.metadata["sdf_field_scaling"]),
+        }
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+        with open(path, "w", encoding="UTF-8") as file:
+            json.dump(data, file, indent=4)
 
 @dataclass
 class SDFStudioDataParserConfig(DataParserConfig):
@@ -147,6 +167,7 @@ class SDFStudio(DataParser):
                 "depth_filenames": depth_filenames if len(depth_filenames) > 0 else None,
                 "normal_filenames": normal_filenames if len(normal_filenames) > 0 else None,
                 "transform": transform,
+                "sdf_field_scaling": meta["sdffieldscaling"],
                 # required for normal maps, these are in colmap format so they require c2w before conversion
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,
                 "include_mono_prior": self.config.include_mono_prior,

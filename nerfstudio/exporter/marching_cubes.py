@@ -140,6 +140,7 @@ def generate_mesh_with_multires_marching_cubes(
     bounding_box_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     isosurface_threshold: float = 0.0,
     coarse_mask: Union[None, Bool[Tensor, "height width depth"]] = None,
+    field_scaling: float = 1.0,
 ) -> trimesh.Trimesh:
     """
     Computes the isosurface of a signed distance function (SDF) defined by the
@@ -247,6 +248,7 @@ def generate_mesh_with_multires_marching_cubes(
                         mask=current_mask,
                     )
                     verts = verts + np.array([x_min, y_min, z_min])
+                    verts *= field_scaling
 
                     meshcrop = trimesh.Trimesh(verts, faces, normals)  # type: ignore
                     meshes.append(meshcrop)

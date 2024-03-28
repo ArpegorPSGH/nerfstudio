@@ -44,6 +44,7 @@ from nerfstudio.models.splatfacto import SplatfactoModel
 from nerfstudio.pipelines.base_pipeline import Pipeline, VanillaPipeline
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.utils.rich_utils import CONSOLE
+from nerfstudio.utils.io import load_from_json
 
 
 @dataclass
@@ -411,6 +412,13 @@ class ExportMarchingCubesMesh(Exporter):
             self.output_dir.mkdir(parents=True)
 
         _, pipeline, _, _ = eval_setup(self.load_config)
+        
+        transforms = load_from_json(self.load_config.parent / "dataparser_transforms.json")
+        field_scaling = 1.0
+        try:
+            field_scaling = transforms["sdf_field_scaling"]
+        except Exception: 
+            pass
 
         # TODO: Make this work with Density Field
         assert hasattr(pipeline.model.config, "sdf_field"), "Model must have an SDF field."
@@ -431,6 +439,7 @@ class ExportMarchingCubesMesh(Exporter):
             bounding_box_max=self.bounding_box_max,
             isosurface_threshold=self.isosurface_threshold,
             coarse_mask=None,
+            field_scaling=field_scaling,
         )
         filename = self.output_dir / "sdf_marching_cubes_mesh.ply"
         multi_res_mesh.export(filename)

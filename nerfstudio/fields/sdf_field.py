@@ -376,6 +376,7 @@ class SDFField(Field):
         """compute absorption"""
         sigma = self.deviation_network.get_variance()
         mat_absorption = self.material_absorption_coef_network.get_material_absorption_coefficient()
+        print("sigma=", sigma, "mat_absorption=", mat_absorption, "sdf min=", torch.min(sdf), "sdf max=", torch.max(sdf))
         exponent = torch.minimum(torch.tensor(np.log(torch.finfo(sdf.dtype).max)*(1-torch.finfo(sdf.dtype).resolution), dtype=sdf.dtype, device=sdf.device), sigma * sdf)
         absorption = (mat_absorption - def_absorption) / (1 + torch.exp(exponent)) + def_absorption
         return absorption
@@ -464,6 +465,7 @@ class SDFField(Field):
         source_diameter: Float[Tensor, "1"] = 1,
         source_position: Optional[Float[Tensor, "3"]] = None,
         pixel_size: Float[Tensor, "1"] = 1,
+        field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """compute output of ray samples"""
         if ray_samples.camera_indices is None:
@@ -477,7 +479,7 @@ class SDFField(Field):
             inputs = ray_samples.frustums.get_positions()
         else:
             inputs = ray_samples.frustums.get_start_positions()
-        inputs = inputs.view(-1, 3)
+        inputs = inputs.view(-1, 3)/field_scaling
 
         directions = ray_samples.frustums.directions
         directions_flat = directions.reshape(-1, 3)
@@ -534,6 +536,7 @@ class SDFField(Field):
         source_diameter: Float[Tensor, "1"] = 1,
         source_position: Optional[Float[Tensor, "3"]] = None,
         pixel_size: Float[Tensor, "1"] = 1,
+        field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """Evaluates the field at points along the ray.
 
@@ -554,5 +557,6 @@ class SDFField(Field):
                                          source_diameter=source_diameter,
                                          source_position=source_position,
                                          pixel_size=pixel_size,
+                                         field_scaling=field_scaling,
                                          )
         return field_outputs
