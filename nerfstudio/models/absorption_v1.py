@@ -96,21 +96,6 @@ class AbsorptionModel(VolumeModel):
         self, training_callback_attributes: TrainingCallbackAttributes
     ) -> List[TrainingCallback]:
         callbacks = []
-        # anneal for cos in NeuS
-        if self.anneal_end > 0:
-
-            def set_anneal(step):
-                anneal = min([1.0, step / self.anneal_end])
-                self.field.set_cos_anneal_ratio(anneal)
-
-            callbacks.append(
-                TrainingCallback(
-                    where_to_run=[TrainingCallbackLocation.BEFORE_TRAIN_ITERATION],
-                    update_every_num_iters=1,
-                    func=set_anneal,
-                )
-            )
-
         return callbacks
 
     def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict:

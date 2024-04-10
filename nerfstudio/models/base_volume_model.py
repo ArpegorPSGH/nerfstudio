@@ -93,7 +93,7 @@ class VolumeModel(SurfaceModel):
         image_absorption = torch.log(torch.minimum(torch.maximum(image-torch.sign(image-pred_image)*torch.minimum(pixel_precision/2, torch.abs(image-pred_image)), resolution), init_intensity-resolution)/init_intensity)
         pred_image_absorption = torch.log(torch.minimum(torch.maximum(pred_image, resolution), init_intensity-resolution)/init_intensity)
         print(image_absorption.mean(), pred_image_absorption.mean())
-        loss = torch.maximum(image_absorption/pred_image_absorption, pred_image_absorption/image_absorption)**0.1-1
+        loss = torch.maximum(image_absorption/pred_image_absorption, pred_image_absorption/image_absorption)**0.01-1
         loss = loss.mean()
         return loss
 
