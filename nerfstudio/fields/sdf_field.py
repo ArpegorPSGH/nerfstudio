@@ -493,7 +493,10 @@ class SDFField(Field):
             outputs=sdf, inputs=inputs, grad_outputs=d_output, create_graph=True, retain_graph=True, only_inputs=True
         )[0]
 
-        rgb = self.get_colors(inputs, directions_flat, gradients, geo_feature, camera_indices)
+        if return_absorption:
+            rgb = torch.zeros_like(inputs)
+        else:
+            rgb = self.get_colors(inputs, directions_flat, gradients, geo_feature, camera_indices)
 
         rgb = rgb.view(*ray_samples.frustums.directions.shape[:-1], -1)
         sdf = sdf.view(*ray_samples.frustums.directions.shape[:-1], -1)
