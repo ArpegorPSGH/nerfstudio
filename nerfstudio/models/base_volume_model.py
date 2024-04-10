@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Type, cast
+from abc import abstractmethod
 
 import torch
 from torch.nn import Parameter
@@ -27,20 +28,30 @@ from torch.nn import Parameter
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.field_components.field_heads import FieldHeadNames
 
-from nerfstudio.model_components.renderers import AbsorptionRenderer
+from nerfstudio.field_components.spatial_distortions import SceneContraction
+from nerfstudio.model_components.renderers import AbsorptionRenderer, AccumulationRenderer, DepthRenderer, SemanticRenderer
 from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
-from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
+from nerfstudio.models.base_model import Model, ModelConfig
+from nerfstudio.fields.sdf_field import SDFFieldConfig
 from nerfstudio.model_components.losses import L1Loss, MSELoss
 
 
 @dataclass
-class VolumeModelConfig(SurfaceModelConfig):
+class VolumeModelConfig(ModelConfig):
     """Volume Model Config"""
 
     _target: Type = field(default_factory=lambda: VolumeModel)
+    near_plane: float = 0.05
+    """How far along the ray to start sampling."""
+    far_plane: float = 4.0
+    """How far along the ray to stop sampling."""
+    eikonal_loss_mult: float = 0.1
+    """Monocular normal consistency loss multiplier."""
+    sdf_field: SDFFieldConfig = field(default_factory=SDFFieldConfig)
+    """Config for SDF Field"""
 
 
-class VolumeModel(SurfaceModel):
+class VolumeModel(Model):
     """Base volume model
 
     Args:
@@ -52,6 +63,15 @@ class VolumeModel(SurfaceModel):
     def populate_modules(self):
         """Set the fields and modules."""
         super().populate_modules()
+        self.scene_contraction = SceneContraction(order=float("inf"))
+
+        # Can we also use contraction for sdf?
+        # Fields
+        self.field = self.config.sdf_field.setup(
+            aabb=self.scene_box.aabb,
+            spatial_distortion=self.scene_contraction,
+            num_images=self.num_train_data,
+        )
         metadata = self.kwargs["metadata"]
         collider_type = metadata["collider_type"]
         if collider_type == 'near_far':
@@ -62,8 +82,34 @@ class VolumeModel(SurfaceModel):
             self.collider = SphereCollider(center=metadata["center"], radius=metadata["radius"])
         else:
             raise NotImplementedError("collider type not implemented")
+        
+         # dummy background model
+        self.field_background = Parameter(torch.ones(1), requires_grad=False)
+
         self.renderer_absorption = AbsorptionRenderer()
+        self.renderer_accumulation = AccumulationRenderer()
+        self.renderer_depth = DepthRenderer(method="expected")
+        self.renderer_normal = SemanticRenderer()
+
         self.rgb_loss = MSELoss()
+        self.eikonal_loss = MSELoss()
+
+    def get_param_groups(self) -> Dict[str, List[Parameter]]:
+        param_groups = {}
+        param_groups["fields"] = list(self.field.parameters())
+        return param_groups
+
+    @abstractmethod
+    def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict[str, Any]:
+        """Takes in a Ray Bundle and returns a dictionary of samples and field output.
+
+        Args:
+            ray_bundle: Input bundle of rays. This raybundle should have all the
+            needed information to compute the outputs.
+
+        Returns:
+            Outputs of model. (ie. rendered colors)
+        """
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
         """Computes and returns the losses dict.

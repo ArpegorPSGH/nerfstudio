@@ -79,7 +79,6 @@ class AbsorptionModel(VolumeModel):
         self.sampler = AbsorptionSampler(
             num_samples=self.config.num_samples,
             num_samples_importance_per_step=self.config.num_samples_importance_per_step,
-            num_samples_outside=self.config.num_samples_outside,
             num_upsample_steps=self.config.num_up_sample_steps,
             base_variance=self.config.base_variance,
         )

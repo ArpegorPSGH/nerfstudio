@@ -798,7 +798,6 @@ class AbsorptionSampler(Sampler):
         self,
         num_samples: int = 64,
         num_samples_importance_per_step: int = 64,
-        num_samples_outside: int = 32,
         num_upsample_steps: int = 4,
         base_variance: float = 64,
         single_jitter: bool = True,
@@ -807,7 +806,6 @@ class AbsorptionSampler(Sampler):
         super().__init__()
         self.num_samples = num_samples
         self.num_samples_importance_per_step = num_samples_importance_per_step
-        self.num_samples_outside = num_samples_outside
         self.num_upsample_steps = num_upsample_steps
         self.base_variance = base_variance
         self.single_jitter = single_jitter
