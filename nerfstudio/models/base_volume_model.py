@@ -65,12 +65,14 @@ class VolumeModel(Model):
         super().populate_modules()
         self.scene_contraction = SceneContraction(order=float("inf"))
 
+        self.init_mat_absorption = self.kwargs["metadata"]["material_absorption_coef_init"]
         # Can we also use contraction for sdf?
         # Fields
         self.field = self.config.sdf_field.setup(
             aabb=self.scene_box.aabb,
             spatial_distortion=self.scene_contraction,
             num_images=self.num_train_data,
+            material_absorption_coef_init=self.init_mat_absorption
         )
         metadata = self.kwargs["metadata"]
         collider_type = metadata["collider_type"]

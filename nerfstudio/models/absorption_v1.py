@@ -50,7 +50,7 @@ class AbsorptionModelConfig(VolumeModelConfig):
     perturb: bool = True
     """Use to use perturb for the sampled points"""
     init_mat_absorption: float = 1
-    """Absorption constant of the object's material"""
+    """Absorption constant of the object's material""" #as close as possible to real value, while avoiding saturating pixels to 0 or 1
     def_absorption: float = 0
     """Absorption constant outside of the object"""
     source_power: float = 1
@@ -84,12 +84,12 @@ class AbsorptionModel(VolumeModel):
         )
 
         self.def_absorption = self.config.def_absorption
-        self.source_power = self.config.source_power
-        self.source_diameter = self.config.source_diameter
-        self.source_position = self.config.source_position
-        self.pixel_size = self.config.pixel_size
-        self.anneal_end = 50000
-        self.field_scaling = self.kwargs["metadata"]["sdf_field_scaling"]
+        metadata = self.kwargs["metadata"]
+        self.source_power = metadata["source_power"]
+        self.source_diameter = metadata["source_diameter"]
+        self.source_position = metadata["source_position"]
+        self.pixel_size = metadata["pixel_size"]
+        self.field_scaling = metadata["sdf_field_scaling"]
 
     def get_training_callbacks(
         self, training_callback_attributes: TrainingCallbackAttributes

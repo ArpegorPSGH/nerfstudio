@@ -150,6 +150,7 @@ class SDFField(Field):
         config: SDFFieldConfig,
         aabb: Float[Tensor, "2 3"],
         num_images: int,
+        material_absorption_coef_init: float = 1,
         use_average_appearance_embedding: bool = False,
         spatial_distortion: Optional[SpatialDistortion] = None,
     ) -> None:
@@ -160,6 +161,8 @@ class SDFField(Field):
 
         self.spatial_distortion = spatial_distortion
         self.num_images = num_images
+
+        self.material_absorption_coef_init = material_absorption_coef_init
 
         self.embedding_appearance = Embedding(self.num_images, self.config.appearance_embedding_dim)
         self.use_average_appearance_embedding = use_average_appearance_embedding
@@ -197,7 +200,7 @@ class SDFField(Field):
 
         # deviation_network to compute alpha from sdf from NeuS
         self.deviation_network = LearnedVariance(init_val=self.config.beta_init)
-        self.material_absorption_coef_network = LearnedMaterialAbsorptionCoefficient(init_val=self.config.material_absorption_coef_init)
+        self.material_absorption_coef_network = LearnedMaterialAbsorptionCoefficient(init_val=self.material_absorption_coef_init)
 
         # color network
         dims = [self.config.hidden_dim_color for _ in range(self.config.num_layers_color)]

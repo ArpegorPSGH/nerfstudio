@@ -567,16 +567,11 @@ method_configs["absorption-model-v1"] = TrainerConfig(
             sdf_field=SDFFieldConfig(
                 geo_feat_dim=0,
                 inside_outside=False,
-                material_absorption_coef_init=1000, #as close as possible to real value, while avoiding saturating pixels to 0 or 1
                 beta_init=100,
                 bias=1, #base size
             ),
             eikonal_loss_mult=1,
             eval_num_rays_per_chunk=1024,
-            source_power=12,
-            source_diameter=2,
-            source_position=(0, 0, -1),
-            pixel_size=2e-3
         ),
     ),
     optimizers={

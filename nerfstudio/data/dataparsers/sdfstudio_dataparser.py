@@ -168,6 +168,11 @@ class SDFStudio(DataParser):
                 "normal_filenames": normal_filenames if len(normal_filenames) > 0 else None,
                 "transform": transform,
                 "sdf_field_scaling": meta["sdffieldscaling"],
+                "material_absorption_coef_init": meta["material_absorption_coef"],
+                "source_power": meta["source_power"],
+                "source_diameter": meta["source_diameter"],
+                "source_position": meta["source_position"],
+                "pixel_size": meta["pixel_size"],
                 # required for normal maps, these are in colmap format so they require c2w before conversion
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,
                 "include_mono_prior": self.config.include_mono_prior,
