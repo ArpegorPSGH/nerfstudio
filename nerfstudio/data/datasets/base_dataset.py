@@ -24,8 +24,8 @@ from typing import Dict, List, Literal
 import numpy as np
 import numpy.typing as npt
 import torch
+import cv2
 from jaxtyping import Float, UInt8
-from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -58,25 +58,26 @@ class InputDataset(Dataset):
     def __len__(self):
         return len(self._dataparser_outputs.image_filenames)
 
-    def get_numpy_image(self, image_idx: int) -> npt.NDArray[np.uint8]:
+    def get_numpy_image(self, image_idx: int) -> npt.NDArray:
         """Returns the image of shape (H, W, 3 or 4).
 
         Args:
             image_idx: The image index in the dataset.
         """
         image_filename = self._dataparser_outputs.image_filenames[image_idx]
-        pil_image = Image.open(image_filename)
+        cvimage = cv2.imread(str(image_filename), cv2.IMREAD_UNCHANGED)
+        cvimage = cv2.cvtColor(cvimage, cv2.COLOR_BGR2RGB)
         if self.scale_factor != 1.0:
-            width, height = pil_image.size
+            width, height = cvimage.size
             newsize = (int(width * self.scale_factor), int(height * self.scale_factor))
-            pil_image = pil_image.resize(newsize, resample=Image.BILINEAR)
-        image = np.array(pil_image, dtype="uint8")  # shape is (h, w) or (h, w, 3 or 4)
-        if len(image.shape) == 2:
+            cvimage = cv2.resize(cvimage, newsize)
+        image = np.array(cvimage)
+        bit_depth = int(str(image.dtype)[4:])
+        if len(image.shape) == 2: # shape is (h, w) or (h, w, 3 or 4)
             image = image[:, :, None].repeat(3, axis=2)
         assert len(image.shape) == 3
-        assert image.dtype == np.uint8
-        assert image.shape[2] in [3, 4], f"Image shape of {image.shape} is in correct."
-        return image
+        assert image.shape[2] in [3, 4], f"Image shape of {image.shape} is incorrect."
+        return image, bit_depth
 
     def get_image_float32(self, image_idx: int) -> Float[Tensor, "image_height image_width num_channels"]:
         """Returns a 3 channel image in float32 torch.Tensor.
@@ -84,13 +85,14 @@ class InputDataset(Dataset):
         Args:
             image_idx: The image index in the dataset.
         """
-        image = torch.from_numpy(self.get_numpy_image(image_idx).astype("float32") / 255.0)
+        npimage, bit_depth = self.get_numpy_image(image_idx)
+        image = torch.from_numpy(npimage.astype("float32") / (2**bit_depth-1))
         if self._dataparser_outputs.alpha_color is not None and image.shape[-1] == 4:
             assert (self._dataparser_outputs.alpha_color >= 0).all() and (
                 self._dataparser_outputs.alpha_color <= 1
             ).all(), "alpha color given is out of range between [0, 1]."
             image = image[:, :, :3] * image[:, :, -1:] + self._dataparser_outputs.alpha_color * (1.0 - image[:, :, -1:])
-        return image
+        return image, bit_depth
 
     def get_image_uint8(self, image_idx: int) -> UInt8[Tensor, "image_height image_width num_channels"]:
         """Returns a 3 channel image in uint8 torch.Tensor.
@@ -98,7 +100,8 @@ class InputDataset(Dataset):
         Args:
             image_idx: The image index in the dataset.
         """
-        image = torch.from_numpy(self.get_numpy_image(image_idx))
+        npimage, bit_depth = self.get_numpy_image(image_idx)
+        image = torch.from_numpy(npimage.astype("uint8"))
         if self._dataparser_outputs.alpha_color is not None and image.shape[-1] == 4:
             assert (self._dataparser_outputs.alpha_color >= 0).all() and (
                 self._dataparser_outputs.alpha_color <= 1
@@ -107,7 +110,7 @@ class InputDataset(Dataset):
                 1.0 - image[:, :, -1:] / 255.0
             )
             image = torch.clamp(image, min=0, max=255).to(torch.uint8)
-        return image
+        return image, bit_depth
 
     def get_data(self, image_idx: int, image_type: Literal["uint8", "float32"] = "float32") -> Dict:
         """Returns the ImageDataset data as a dictionary.
@@ -117,13 +120,13 @@ class InputDataset(Dataset):
             image_type: the type of images returned
         """
         if image_type == "float32":
-            image = self.get_image_float32(image_idx)
+            image, bit_depth = self.get_image_float32(image_idx)
         elif image_type == "uint8":
-            image = self.get_image_uint8(image_idx)
+            image, bit_depth = self.get_image_uint8(image_idx)
         else:
             raise NotImplementedError(f"image_type (={image_type}) getter was not implemented, use uint8 or float32")
 
-        data = {"image_idx": image_idx, "image": image}
+        data = {"image_idx": image_idx, "image": image, "bit_depth": bit_depth}
         if self._dataparser_outputs.mask_filenames is not None:
             mask_filepath = self._dataparser_outputs.mask_filenames[image_idx]
             data["mask"] = get_image_mask_tensor_from_path(filepath=mask_filepath, scale_factor=self.scale_factor)

@@ -123,9 +123,10 @@ class VolumeModel(Model):
         """
         loss_dict = {}
         image = batch["image"].to(self.device)
+        pixel_resolution = 1/(2**torch.min(batch["bit_depths"])-1).reshape(-1,1)
         pred_image = outputs["rgb"]
         init_intensity = outputs["initial_intensity"]
-        loss_dict["rgb_loss"] = self.absorption_loss(image, pred_image, init_intensity)
+        loss_dict["rgb_loss"] = self.absorption_loss(image, pred_image, init_intensity, pixel_resolution)
         print("rgb_loss :", loss_dict["rgb_loss"])
         if self.training:
             # eikonal loss
@@ -135,10 +136,9 @@ class VolumeModel(Model):
 
         return loss_dict
 
-    def absorption_loss(self, image, pred_image, init_intensity):
+    def absorption_loss(self, image, pred_image, init_intensity, pixel_resolution):
         resolution = torch.tensor(torch.finfo(pred_image.dtype).resolution)
-        pixel_precision = torch.tensor(1/255) # Aller récupérer la profondeur au moment du loading de l'image
-        image_absorption = torch.log(torch.minimum(torch.maximum(image-torch.sign(image-pred_image)*torch.minimum(pixel_precision/2, torch.abs(image-pred_image)), resolution), init_intensity-resolution)/init_intensity)
+        image_absorption = torch.log(torch.minimum(torch.maximum(image-torch.sign(image-pred_image)*torch.minimum(pixel_resolution/2, torch.abs(image-pred_image)), resolution), init_intensity-resolution)/init_intensity)
         pred_image_absorption = torch.log(torch.minimum(torch.maximum(pred_image, resolution), init_intensity-resolution)/init_intensity)
         print(image_absorption.mean(), pred_image_absorption.mean())
         loss = torch.maximum(image_absorption/pred_image_absorption, pred_image_absorption/image_absorption)**0.01-1
@@ -173,10 +173,6 @@ class VolumeModel(Model):
             absorption=field_outputs[FieldHeadNames.ABSORPTION],
             samples_width=ray_samples.deltas
         )
-
-        # print(field_outputs[FieldHeadNames.SDF][0])
-        # print(field_outputs[FieldHeadNames.ABSORPTION][0])
-        # print(ray_samples.deltas[0])
 
         # convert power to intensity
         pixel_size = samples_and_field_outputs["pixel_size"]
