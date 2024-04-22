@@ -41,12 +41,12 @@ class AbsorptionModelConfig(VolumeModelConfig):
     _target: Type = field(default_factory=lambda: AbsorptionModel)
     num_samples: int = 32
     """Number of uniform samples"""
-    num_samples_importance_per_step: int = 8
+    num_samples_importance_per_step: int = 12
     """Number of importance samples per step"""
-    num_up_sample_steps: int = 8
+    num_up_sample_steps: int = 6
     """Number of up sample step, 1 for simple coarse-to-fine sampling"""
-    base_variance: float = 256
-    """Fixed base variance in NeuS sampler, the inv_s will be base * 2 ** iter during upsample"""
+    init_variance: float = 100
+    """Initial variance for transformation of sdf to density and importance sampling, the inv_s will be init * 2 ** iter during upsample"""
     perturb: bool = True
     """Use to use perturb for the sampled points"""
     init_mat_absorption: float = 1
@@ -80,7 +80,7 @@ class AbsorptionModel(VolumeModel):
             num_samples=self.config.num_samples,
             num_samples_importance_per_step=self.config.num_samples_importance_per_step,
             num_upsample_steps=self.config.num_up_sample_steps,
-            base_variance=self.config.base_variance,
+            base_variance=self.config.init_variance,
         )
 
         self.def_absorption = self.config.def_absorption
@@ -98,7 +98,7 @@ class AbsorptionModel(VolumeModel):
         return callbacks
 
     def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict:
-        ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf)
+        ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf, variance_fn=self.field.deviation_network.get_variance)
         field_outputs = self.field(
             ray_samples,
             mid_points=True,

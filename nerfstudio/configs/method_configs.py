@@ -567,7 +567,6 @@ method_configs["absorption-model-v1"] = TrainerConfig(
             sdf_field=SDFFieldConfig(
                 geo_feat_dim=0,
                 inside_outside=False,
-                beta_init=100,
                 bias=1, #base size
             ),
             eikonal_loss_mult=1,

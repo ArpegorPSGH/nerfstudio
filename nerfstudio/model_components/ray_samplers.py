@@ -825,6 +825,7 @@ class AbsorptionSampler(Sampler):
         self,
         ray_bundle: Optional[RayBundle] = None,
         sdf_fn: Optional[Callable[[RaySamples], torch.Tensor]] = None,
+        variance_fn: Optional[Callable[[], torch.Tensor]] = None,
         ray_samples: Optional[RaySamples] = None,
     ) -> Union[Tuple[RaySamples, torch.Tensor], RaySamples]:
         assert ray_bundle is not None
@@ -839,8 +840,8 @@ class AbsorptionSampler(Sampler):
         sorted_index = None
         sdf: Optional[torch.Tensor] = None
         new_samples = ray_samples
-
-        base_variance = self.base_variance
+        with torch.no_grad():
+            base_variance = variance_fn().item()
 
         while total_iters < self.num_upsample_steps:
             with torch.no_grad():

@@ -72,7 +72,8 @@ class VolumeModel(Model):
             aabb=self.scene_box.aabb,
             spatial_distortion=self.scene_contraction,
             num_images=self.num_train_data,
-            material_absorption_coef_init=self.init_mat_absorption
+            material_absorption_coef_init=self.init_mat_absorption,
+            beta_init=self.config.init_variance,
         )
         metadata = self.kwargs["metadata"]
         collider_type = metadata["collider_type"]

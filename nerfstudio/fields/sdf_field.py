@@ -151,6 +151,7 @@ class SDFField(Field):
         aabb: Float[Tensor, "2 3"],
         num_images: int,
         material_absorption_coef_init: float = 1,
+        beta_init: float = 1,
         use_average_appearance_embedding: bool = False,
         spatial_distortion: Optional[SpatialDistortion] = None,
     ) -> None:
@@ -163,6 +164,7 @@ class SDFField(Field):
         self.num_images = num_images
 
         self.material_absorption_coef_init = material_absorption_coef_init
+        self.config.beta_init = beta_init
 
         self.embedding_appearance = Embedding(self.num_images, self.config.appearance_embedding_dim)
         self.use_average_appearance_embedding = use_average_appearance_embedding
