@@ -66,6 +66,8 @@ class VolumeModel(Model):
         self.scene_contraction = SceneContraction(order=float("inf"))
 
         self.init_mat_absorption = self.kwargs["metadata"]["material_absorption_coef_init"]
+
+        metadata = self.kwargs["metadata"]
         # Can we also use contraction for sdf?
         # Fields
         self.field = self.config.sdf_field.setup(
@@ -74,8 +76,10 @@ class VolumeModel(Model):
             num_images=self.num_train_data,
             material_absorption_coef_init=self.init_mat_absorption,
             beta_init=self.config.init_variance,
+            metadata=metadata,
+            return_initial_power=True,
         )
-        metadata = self.kwargs["metadata"]
+
         collider_type = metadata["collider_type"]
         if collider_type == 'near_far':
             self.collider = NearFarCollider(near_plane=metadata["near"], far_plane=metadata["far"])
@@ -138,6 +142,8 @@ class VolumeModel(Model):
         return loss_dict
 
     def absorption_loss(self, image, pred_image, init_intensity, pixel_resolution):
+        init_intensity = torch.maximum(init_intensity, torch.max(image))
+        pred_image = torch.clip(pred_image, torch.zeros_like(pred_image), init_intensity)
         resolution = torch.tensor(torch.finfo(pred_image.dtype).resolution)
         image_absorption = torch.log(torch.minimum(torch.maximum(image-torch.sign(image-pred_image)*torch.minimum(pixel_resolution/2, torch.abs(image-pred_image)), resolution), init_intensity-resolution)/init_intensity)
         pred_image_absorption = torch.log(torch.minimum(torch.maximum(pred_image, resolution), init_intensity-resolution)/init_intensity)
@@ -181,10 +187,9 @@ class VolumeModel(Model):
         intensity = power/pixel_size**2
 
         # convert intensity to Blender pixel value
-        value = torch.clip(intensity * 0.25, min=0, max=1).expand(-1, 3)
-        init_value = torch.clip(initial_intensity * 0.25, min=0, max=1).expand(-1, 3)
+        value = torch.clip(intensity * 0.444444, min=0, max=1).expand(-1, 3)
+        init_value = torch.clip(initial_intensity * 0.444444, min=0, max=1).expand(-1, 3)
         # print("min value", torch.min(value), "max value", torch.max(value))
-
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         # the rendered depth is point-to-point distance and we should convert to depth
         depth = depth / ray_bundle.metadata["directions_norm"]

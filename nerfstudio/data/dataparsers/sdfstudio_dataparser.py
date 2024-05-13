@@ -170,8 +170,10 @@ class SDFStudio(DataParser):
                 "sdf_field_scaling": meta["sdffieldscaling"],
                 "material_absorption_coef_init": meta["material_absorption_coef"],
                 "source_power": meta["source_power"],
-                "source_diameter": meta["source_diameter"],
-                "source_position": meta["source_position"],
+                "source_shape": meta["source_shape"],
+                "source_size_X": meta["source_size_X"],
+                "source_size_Y": meta["source_size_Y"],
+                "source_transformations": meta["source_transformations"],
                 "pixel_size": meta["pixel_size"],
                 # required for normal maps, these are in colmap format so they require c2w before conversion
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,

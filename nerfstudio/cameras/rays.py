@@ -217,6 +217,16 @@ class RayBundle(TensorDataclass):
     """Additional metadata or data needed for interpolation, will mimic shape of rays"""
     times: Optional[Float[Tensor, "*batch 1"]] = None
     """Times at which rays are sampled"""
+    source_intersection: Optional[Float[Tensor, "*batch 2"]] = None
+    """Coordinates of intersection with ray source in source coordinate system (XY)"""
+
+    def get_rays_ends(self) -> Float[Tensor, "*batch 3"]:
+        """Calculates "end" position of ray.
+
+        Returns:
+            xyz positions.
+        """
+        return self.origins + self.directions * self.fars
 
     def set_camera_indices(self, camera_index: int) -> None:
         """Sets all the camera indices to a specific camera index.

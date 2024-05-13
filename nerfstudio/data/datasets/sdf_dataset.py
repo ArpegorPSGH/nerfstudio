@@ -25,6 +25,8 @@ from torch import Tensor
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
+from nerfstudio.model_components.ray_generators import RayGenerator
+from nerfstudio.model_components.source_colliders import RectangleSourceCollider, EllipseSourceCollider
 
 
 class SDFDataset(InputDataset):
@@ -47,6 +49,23 @@ class SDFDataset(InputDataset):
         # can be none if auto orient not enabled in dataparser
         self.transform = self.metadata["transform"]
         self.include_mono_prior = self.metadata["include_mono_prior"]
+        self.train_ray_generator = RayGenerator(self.cameras)
+        try:
+            if self.metadata["source_shape"] == "RECTANGLE":
+                self.metadata["source_collider"] = RectangleSourceCollider(X_size=self.metadata["source_size_X"], 
+                                                                           Y_size=self.metadata["source_size_Y"], 
+                                                                           transformations=torch.Tensor(self.metadata["source_transformations"]))
+                self.metadata["source_surface"] = self.metadata["source_size_X"] * self.metadata["source_size_Y"]
+            elif self.metadata["source_shape"] == "ELLIPSE":
+                self.metadata["source_collider"] = EllipseSourceCollider(X_size=self.metadata["source_size_X"], 
+                                                                         Y_size=self.metadata["source_size_Y"], 
+                                                                         transformations=torch.Tensor(self.metadata["source_transformations"]))
+                self.metadata["source_surface"] = np.pi * self.metadata["source_size_X"]/2 * self.metadata["source_size_Y"]/2
+            else:
+                raise NotImplementedError
+        except Exception:
+            pass
+
 
     def get_metadata(self, data: Dict) -> Dict:
         # TODO supports foreground_masks
@@ -62,6 +81,23 @@ class SDFDataset(InputDataset):
             )
             metadata["depth"] = depth_image
             metadata["normal"] = normal_image
+
+        if "source_collider" in self.metadata:
+            X_steps = torch.linspace(start=0, end=data["image"].shape[0]-1, steps=data["image"].shape[0])
+            Y_steps = torch.linspace(start=0, end=data["image"].shape[1]-1, steps=data["image"].shape[1])
+            pixel_indices_X, pixel_indices_Y = torch.meshgrid(X_steps, Y_steps)
+            camera_indices = torch.full(data["image"].shape[0:2], data["image_idx"])
+            ray_indices = torch.dstack([camera_indices, pixel_indices_X, pixel_indices_Y])
+            ray_indices = torch.flatten(ray_indices, end_dim=1).to(dtype=torch.int32)
+            ray_bundle = self.train_ray_generator(ray_indices)
+            ray_bundle = self.metadata["source_collider"](ray_bundle)
+            source_intersection = ray_bundle.source_intersection
+            mask = ~torch.isnan(source_intersection)
+            mask = mask.reshape(data["image"].shape)
+            if "mask" in data:
+                data["mask"] &= mask
+            else:
+                data["mask"] = mask
 
         return metadata
 

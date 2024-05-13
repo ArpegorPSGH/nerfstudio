@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Type
+from jaxtyping import Float
+from torch import Tensor
 
 import torch
 
@@ -55,10 +57,14 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption constant outside of the object"""
     source_power: float = 1
     """Total power of the ray source"""
-    source_diameter: float = 1
-    """Diameter of the ray source"""
-    source_position: tuple = (0,0,0)
-    """3D position of the ray source"""
+    source_shape: str = "RECTANGLE"
+    """Shape of the ray source"""
+    source_size_X: float = 1
+    """X dimension of the ray source"""
+    source_size_Y: float = 1
+    """Y dimension of the ray source"""
+    source_transformations: Float[Tensor, "4 4"] = torch.eye(4)
+    """3D transformations from ray source space to world space"""
     pixel_size: float = 1
     """Pixel size of the sensor"""
 
@@ -86,8 +92,10 @@ class AbsorptionModel(VolumeModel):
         self.def_absorption = self.config.def_absorption
         metadata = self.kwargs["metadata"]
         self.source_power = metadata["source_power"]
-        self.source_diameter = metadata["source_diameter"]
-        self.source_position = metadata["source_position"]
+        self.source_shape = metadata["source_shape"]
+        self.source_size_X = metadata["source_size_X"]
+        self.source_size_Y = metadata["source_size_Y"]
+        self.source_transformations = metadata["source_transformations"]
         self.pixel_size = metadata["pixel_size"]
         self.field_scaling = metadata["sdf_field_scaling"]
 
@@ -101,13 +109,12 @@ class AbsorptionModel(VolumeModel):
         ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf, variance_fn=self.field.deviation_network.get_variance)
         field_outputs = self.field(
             ray_samples,
+            ray_bundle,
             mid_points=True,
             return_absorption=True,
             def_absorption=self.def_absorption,
             return_initial_power=True,
             source_power=self.source_power,
-            source_diameter=self.source_diameter,
-            source_position=self.source_position,
             pixel_size=self.pixel_size,
             field_scaling=self.field_scaling
         )

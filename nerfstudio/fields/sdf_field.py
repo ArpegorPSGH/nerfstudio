@@ -27,7 +27,8 @@ from jaxtyping import Float
 from torch import Tensor, nn
 from torch.nn.parameter import Parameter
 
-from nerfstudio.cameras.rays import RaySamples
+from nerfstudio.model_components.source_colliders import SourceCollider
+from nerfstudio.cameras.rays import RaySamples, RayBundle 
 from nerfstudio.field_components.embedding import Embedding
 from nerfstudio.field_components.encodings import NeRFEncoding
 from nerfstudio.field_components.field_heads import FieldHeadNames
@@ -152,6 +153,8 @@ class SDFField(Field):
         num_images: int,
         material_absorption_coef_init: float = 1,
         beta_init: float = 1,
+        metadata: dict() = None,
+        return_initial_power: bool = False,
         use_average_appearance_embedding: bool = False,
         spatial_distortion: Optional[SpatialDistortion] = None,
     ) -> None:
@@ -165,6 +168,11 @@ class SDFField(Field):
 
         self.material_absorption_coef_init = material_absorption_coef_init
         self.config.beta_init = beta_init
+        self.return_initial_power = return_initial_power
+
+        if self.return_initial_power:
+            self.source_collider = metadata["source_collider"]
+            self.source_surface = metadata["source_surface"]
 
         self.embedding_appearance = Embedding(self.num_images, self.config.appearance_embedding_dim)
         self.use_average_appearance_embedding = use_average_appearance_embedding
@@ -388,24 +396,22 @@ class SDFField(Field):
 
     def get_initial_power(
             self,
-            ray_samples: RaySamples,
+            ray_bundle: RayBundle,
             def_absorption: Float[Tensor, "1"],
             source_power: Float[Tensor, "1"],
-            source_diameter: Float[Tensor, "1"],
-            source_position: Float[Tensor, "1 ... 3"],
             pixel_size: Float[Tensor, "1"],
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute initial powers of the rays"""
 
-        # compute vectors between end of rays and source position
-        vectors = ray_samples.frustums.get_end_positions()[:,-1] - source_position.view(1,3)
-        # compute projection of vectors on rays directions (distances along rays)
-        directions = ray_samples.frustums.directions[:,-1]
-        distances = torch.abs((vectors*directions).sum(axis=1)/(directions**2).sum(axis=1)).unsqueeze(-1)
+        ray_bundle = self.source_collider(ray_bundle)
+        
+        # compute distance between end of ray and intersection with source
+        vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersection
+        distances = torch.linalg.vector_norm(vectors, dim=1)
 
-        initial_powers = source_power * pixel_size ** 2 / (torch.pi * (source_diameter / 2) ** 2) * torch.exp(-def_absorption * distances)
+        initial_power = source_power * pixel_size ** 2 / self.source_surface * torch.exp(-def_absorption * distances)
 
-        return initial_powers
+        return torch.nan_to_num(initial_power).unsqueeze(-1)
 
     def get_colors(
         self,
@@ -460,6 +466,7 @@ class SDFField(Field):
     def get_outputs(
         self,
         ray_samples: RaySamples,
+        ray_bundle: Optional[RayBundle] = None,
         density_embedding: Optional[Tensor] = None,
         return_alphas: bool = False,
         mid_points: bool = False,
@@ -467,8 +474,6 @@ class SDFField(Field):
         def_absorption: Float[Tensor, "1"] = 0,
         return_initial_power: bool = False,
         source_power: Float[Tensor, "1"] = 1,
-        source_diameter: Float[Tensor, "1"] = 1,
-        source_position: Optional[Float[Tensor, "3"]] = None,
         pixel_size: Float[Tensor, "1"] = 1,
         field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
@@ -526,7 +531,10 @@ class SDFField(Field):
             outputs.update({FieldHeadNames.ABSORPTION: absorption})
 
         if return_initial_power:
-            initial_power = self.get_initial_power(ray_samples, def_absorption, source_power, source_diameter, source_position, pixel_size)
+            initial_power = self.get_initial_power(ray_bundle=ray_bundle,
+                                                   def_absorption=def_absorption,
+                                                   source_power=source_power,
+                                                   pixel_size=pixel_size)
             outputs.update({FieldHeadNames.POWER: initial_power})
 
         return outputs
@@ -534,6 +542,7 @@ class SDFField(Field):
     def forward(
         self,
         ray_samples: RaySamples,
+        ray_bundle: Optional[RayBundle] = None,
         compute_normals: bool = False,
         return_alphas: bool = False,
         mid_points: bool = False,
@@ -541,8 +550,6 @@ class SDFField(Field):
         def_absorption: Float[Tensor, "1"] = 0,
         return_initial_power: bool = False,
         source_power: Float[Tensor, "1"] = 1,
-        source_diameter: Float[Tensor, "1"] = 1,
-        source_position: Optional[Float[Tensor, "3"]] = None,
         pixel_size: Float[Tensor, "1"] = 1,
         field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
@@ -553,17 +560,15 @@ class SDFField(Field):
             compute normals: not currently used in this implementation.
             return_alphas: Whether to return alpha values
         """
-        if source_position is not None:
-            source_position = torch.tensor(source_position, device=ray_samples.deltas.device)
+        
         field_outputs = self.get_outputs(ray_samples,
+                                         ray_bundle,
                                          return_alphas=return_alphas,
                                          mid_points=mid_points,
                                          return_absorption=return_absorption,
                                          def_absorption=def_absorption,
                                          return_initial_power=return_initial_power,
                                          source_power=source_power,
-                                         source_diameter=source_diameter,
-                                         source_position=source_position,
                                          pixel_size=pixel_size,
                                          field_scaling=field_scaling,
                                          )
