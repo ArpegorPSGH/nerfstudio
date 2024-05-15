@@ -157,6 +157,12 @@ class SDFField(Field):
         return_initial_power: bool = False,
         use_average_appearance_embedding: bool = False,
         spatial_distortion: Optional[SpatialDistortion] = None,
+        mid_points: bool = False,
+        return_absorption: bool = False,
+        def_absorption: float = 0,
+        source_power: float = 1,
+        pixel_size: float = 1,
+        field_scaling: float = 1,
     ) -> None:
         super().__init__()
         self.config = config
@@ -173,6 +179,13 @@ class SDFField(Field):
         if self.return_initial_power:
             self.source_collider = metadata["source_collider"]
             self.source_surface = metadata["source_surface"]
+
+        self.mid_points = mid_points
+        self.return_absorption = return_absorption
+        self.def_absorption = def_absorption
+        self.source_power = source_power
+        self.pixel_size = pixel_size
+        self.field_scaling = field_scaling
 
         self.embedding_appearance = Embedding(self.num_images, self.config.appearance_embedding_dim)
         self.use_average_appearance_embedding = use_average_appearance_embedding
@@ -384,32 +397,28 @@ class SDFField(Field):
     def get_absorption(
             self,
             sdf: Float[Tensor, "num_samples ... 1"],
-            def_absorption: Float[Tensor, "1"],
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute absorption"""
         sigma = self.deviation_network.get_variance()
         mat_absorption = self.material_absorption_coef_network.get_material_absorption_coefficient()
         print("sigma=", sigma, "mat_absorption=", mat_absorption, "sdf min=", torch.min(sdf), "sdf max=", torch.max(sdf))
         exponent = torch.minimum(torch.tensor(np.log(torch.finfo(sdf.dtype).max)*(1-torch.finfo(sdf.dtype).resolution), dtype=sdf.dtype, device=sdf.device), sigma * sdf)
-        absorption = (mat_absorption - def_absorption) / (1 + torch.exp(exponent)) + def_absorption
+        absorption = (mat_absorption - self.def_absorption) / (1 + torch.exp(exponent)) + self.def_absorption
         return absorption
 
     def get_initial_power(
             self,
             ray_bundle: RayBundle,
-            def_absorption: Float[Tensor, "1"],
-            source_power: Float[Tensor, "1"],
-            pixel_size: Float[Tensor, "1"],
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute initial powers of the rays"""
 
         ray_bundle = self.source_collider(ray_bundle)
-        
+
         # compute distance between end of ray and intersection with source
         vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersection
         distances = torch.linalg.vector_norm(vectors, dim=1)
 
-        initial_power = source_power * pixel_size ** 2 / self.source_surface * torch.exp(-def_absorption * distances)
+        initial_power = self.source_power * self.pixel_size ** 2 / self.source_surface * torch.exp(-self.def_absorption * distances)
 
         return torch.nan_to_num(initial_power).unsqueeze(-1)
 
@@ -469,13 +478,6 @@ class SDFField(Field):
         ray_bundle: Optional[RayBundle] = None,
         density_embedding: Optional[Tensor] = None,
         return_alphas: bool = False,
-        mid_points: bool = False,
-        return_absorption: bool = False,
-        def_absorption: Float[Tensor, "1"] = 0,
-        return_initial_power: bool = False,
-        source_power: Float[Tensor, "1"] = 1,
-        pixel_size: Float[Tensor, "1"] = 1,
-        field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """compute output of ray samples"""
         if ray_samples.camera_indices is None:
@@ -485,11 +487,11 @@ class SDFField(Field):
 
         camera_indices = ray_samples.camera_indices.squeeze()
 
-        if mid_points:
+        if self.mid_points:
             inputs = ray_samples.frustums.get_positions()
         else:
             inputs = ray_samples.frustums.get_start_positions()
-        inputs = inputs.view(-1, 3)/field_scaling
+        inputs = inputs.view(-1, 3)/self.field_scaling
 
         directions = ray_samples.frustums.directions
         directions_flat = directions.reshape(-1, 3)
@@ -503,7 +505,7 @@ class SDFField(Field):
             outputs=sdf, inputs=inputs, grad_outputs=d_output, create_graph=True, retain_graph=True, only_inputs=True
         )[0]
 
-        if return_absorption:
+        if self.return_absorption:
             rgb = torch.zeros_like(inputs)
         else:
             rgb = self.get_colors(inputs, directions_flat, gradients, geo_feature, camera_indices)
@@ -526,15 +528,12 @@ class SDFField(Field):
             alphas = self.get_alpha(ray_samples, sdf, gradients)
             outputs.update({FieldHeadNames.ALPHA: alphas})
 
-        if return_absorption:
-            absorption = self.get_absorption(sdf, def_absorption)
+        if self.return_absorption:
+            absorption = self.get_absorption(sdf)
             outputs.update({FieldHeadNames.ABSORPTION: absorption})
 
-        if return_initial_power:
-            initial_power = self.get_initial_power(ray_bundle=ray_bundle,
-                                                   def_absorption=def_absorption,
-                                                   source_power=source_power,
-                                                   pixel_size=pixel_size)
+        if self.return_initial_power:
+            initial_power = self.get_initial_power(ray_bundle)
             outputs.update({FieldHeadNames.POWER: initial_power})
 
         return outputs
@@ -545,13 +544,6 @@ class SDFField(Field):
         ray_bundle: Optional[RayBundle] = None,
         compute_normals: bool = False,
         return_alphas: bool = False,
-        mid_points: bool = False,
-        return_absorption: bool = False,
-        def_absorption: Float[Tensor, "1"] = 0,
-        return_initial_power: bool = False,
-        source_power: Float[Tensor, "1"] = 1,
-        pixel_size: Float[Tensor, "1"] = 1,
-        field_scaling: Float[Tensor, "1"] = 1,
     ) -> Dict[FieldHeadNames, Tensor]:
         """Evaluates the field at points along the ray.
 
@@ -564,12 +556,5 @@ class SDFField(Field):
         field_outputs = self.get_outputs(ray_samples,
                                          ray_bundle,
                                          return_alphas=return_alphas,
-                                         mid_points=mid_points,
-                                         return_absorption=return_absorption,
-                                         def_absorption=def_absorption,
-                                         return_initial_power=return_initial_power,
-                                         source_power=source_power,
-                                         pixel_size=pixel_size,
-                                         field_scaling=field_scaling,
                                          )
         return field_outputs

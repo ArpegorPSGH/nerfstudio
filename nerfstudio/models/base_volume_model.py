@@ -68,17 +68,6 @@ class VolumeModel(Model):
         self.init_mat_absorption = self.kwargs["metadata"]["material_absorption_coef_init"]
 
         metadata = self.kwargs["metadata"]
-        # Can we also use contraction for sdf?
-        # Fields
-        self.field = self.config.sdf_field.setup(
-            aabb=self.scene_box.aabb,
-            spatial_distortion=self.scene_contraction,
-            num_images=self.num_train_data,
-            material_absorption_coef_init=self.init_mat_absorption,
-            beta_init=self.config.init_variance,
-            metadata=metadata,
-            return_initial_power=True,
-        )
 
         collider_type = metadata["collider_type"]
         if collider_type == 'near_far':

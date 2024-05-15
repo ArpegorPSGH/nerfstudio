@@ -19,12 +19,14 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Type
+import numpy as np
 
 import torch
 
 from nerfstudio.cameras import camera_utils
 from nerfstudio.cameras.cameras import Cameras, CameraType
 from nerfstudio.data.dataparsers.base_dataparser import DataParser, DataParserConfig, DataparserOutputs
+from nerfstudio.model_components.source_colliders import RectangleSourceCollider, EllipseSourceCollider
 from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.utils.io import load_from_json
 
@@ -159,6 +161,20 @@ class SDFStudio(DataParser):
         # cameras.rescale_output_resolution(scaling_factor=1.0 / self.config.downscale_factor)
         if self.config.include_mono_prior:
             assert meta["has_mono_prior"], f"no mono prior in {self.config.data}"
+
+        if meta["source_shape"] == "RECTANGLE":
+            source_collider = RectangleSourceCollider(X_size=meta["source_size_X"], 
+                                                        Y_size=meta["source_size_Y"], 
+                                                        transformations=torch.Tensor(meta["source_transformations"]))
+            source_surface = meta["source_size_X"] * meta["source_size_Y"]
+        elif meta["source_shape"] == "ELLIPSE":
+            source_collider = EllipseSourceCollider(X_size=meta["source_size_X"], 
+                                                    Y_size=meta["source_size_Y"], 
+                                                    transformations=torch.Tensor(meta["source_transformations"]))
+            source_surface = np.pi * meta["source_size_X"]/2 * meta["source_size_Y"]/2
+        else:
+            raise NotImplementedError
+
         dataparser_outputs = DataparserOutputs(
             image_filenames=image_filenames,
             cameras=cameras,
@@ -170,10 +186,8 @@ class SDFStudio(DataParser):
                 "sdf_field_scaling": meta["sdffieldscaling"],
                 "material_absorption_coef_init": meta["material_absorption_coef"],
                 "source_power": meta["source_power"],
-                "source_shape": meta["source_shape"],
-                "source_size_X": meta["source_size_X"],
-                "source_size_Y": meta["source_size_Y"],
-                "source_transformations": meta["source_transformations"],
+                "source_collider": source_collider,
+                "source_surface": source_surface,
                 "pixel_size": meta["pixel_size"],
                 # required for normal maps, these are in colmap format so they require c2w before conversion
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,

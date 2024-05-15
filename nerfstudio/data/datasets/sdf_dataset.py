@@ -26,7 +26,6 @@ from torch import Tensor
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.model_components.ray_generators import RayGenerator
-from nerfstudio.model_components.source_colliders import RectangleSourceCollider, EllipseSourceCollider
 
 
 class SDFDataset(InputDataset):
@@ -50,22 +49,6 @@ class SDFDataset(InputDataset):
         self.transform = self.metadata["transform"]
         self.include_mono_prior = self.metadata["include_mono_prior"]
         self.train_ray_generator = RayGenerator(self.cameras)
-        try:
-            if self.metadata["source_shape"] == "RECTANGLE":
-                self.metadata["source_collider"] = RectangleSourceCollider(X_size=self.metadata["source_size_X"], 
-                                                                           Y_size=self.metadata["source_size_Y"], 
-                                                                           transformations=torch.Tensor(self.metadata["source_transformations"]))
-                self.metadata["source_surface"] = self.metadata["source_size_X"] * self.metadata["source_size_Y"]
-            elif self.metadata["source_shape"] == "ELLIPSE":
-                self.metadata["source_collider"] = EllipseSourceCollider(X_size=self.metadata["source_size_X"], 
-                                                                         Y_size=self.metadata["source_size_Y"], 
-                                                                         transformations=torch.Tensor(self.metadata["source_transformations"]))
-                self.metadata["source_surface"] = np.pi * self.metadata["source_size_X"]/2 * self.metadata["source_size_Y"]/2
-            else:
-                raise NotImplementedError
-        except Exception:
-            pass
-
 
     def get_metadata(self, data: Dict) -> Dict:
         # TODO supports foreground_masks
