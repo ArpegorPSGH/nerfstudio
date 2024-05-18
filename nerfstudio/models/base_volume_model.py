@@ -30,7 +30,6 @@ from nerfstudio.field_components.field_heads import FieldHeadNames
 
 from nerfstudio.field_components.spatial_distortions import SceneContraction
 from nerfstudio.model_components.renderers import AbsorptionRenderer, AccumulationRenderer, DepthRenderer, SemanticRenderer
-from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.fields.sdf_field import SDFFieldConfig
 from nerfstudio.model_components.losses import L1Loss, MSELoss
@@ -66,18 +65,8 @@ class VolumeModel(Model):
         self.scene_contraction = SceneContraction(order=float("inf"))
 
         self.init_mat_absorption = self.kwargs["metadata"]["material_absorption_coef_init"]
-
-        metadata = self.kwargs["metadata"]
-
-        collider_type = metadata["collider_type"]
-        if collider_type == 'near_far':
-            self.collider = NearFarCollider(near_plane=metadata["near"], far_plane=metadata["far"])
-        elif collider_type == 'box':
-            self.collider = AABBBoxCollider(self.scene_box)
-        elif collider_type == 'sphere':
-            self.collider = SphereCollider(center=metadata["center"], radius=metadata["radius"])
-        else:
-            raise NotImplementedError("collider type not implemented")
+        self.collider = self.kwargs["metadata"]["collider"]
+        self.source_collider = self.kwargs["metadata"]["source_collider"]
         
          # dummy background model
         self.field_background = Parameter(torch.ones(1), requires_grad=False)
@@ -94,6 +83,11 @@ class VolumeModel(Model):
         param_groups = {}
         param_groups["fields"] = list(self.field.parameters())
         return param_groups
+
+    def forward(self, ray_bundle: Union[RayBundle, Cameras]) -> Dict[str, Union[torch.Tensor, List]]:
+        if self.source_collider is not None:
+            ray_bundle = self.source_collider(ray_bundle)
+        return super().forward(ray_bundle)
 
     @abstractmethod
     def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict[str, Any]:

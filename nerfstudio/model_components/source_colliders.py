@@ -49,44 +49,44 @@ class SourceCollider(nn.Module):
         return new_rays_o, new_rays_d
     
     def _intersect_with_plane(self, rays_o: torch.Tensor, rays_d: torch.Tensor):
-        x_intersect = rays_o[:,0] - rays_o[:,2]*rays_d[:,0]/rays_d[:,2]
-        y_intersect = rays_o[:,1] - rays_o[:,2]*rays_d[:,1]/rays_d[:,2]
-        return x_intersect, y_intersect
+        x_intersects = rays_o[:,0] - rays_o[:,2]*rays_d[:,0]/rays_d[:,2]
+        y_intersects = rays_o[:,1] - rays_o[:,2]*rays_d[:,1]/rays_d[:,2]
+        return x_intersects, y_intersects
 
-    def _is_touching_source(self, plane_intersection: torch.Tensor, rays_d: torch.Tensor):
+    def _is_touching_source(self, plane_intersections: torch.Tensor, rays_d: torch.Tensor):
         """To be implemented."""
         raise NotImplementedError
     
-    def set_source_intersection(self, ray_bundle: RayBundle) -> RayBundle:
+    def set_source_intersections(self, ray_bundle: RayBundle) -> RayBundle:
         new_rays_o, new_rays_d = self._transform_rays(rays_o=ray_bundle.origins, rays_d=ray_bundle.directions)
-        plane_x_intersection, plane_y_intersection = self._intersect_with_plane(rays_o=new_rays_o, rays_d=new_rays_d)
-        plane_intersection = torch.cat((plane_x_intersection, plane_y_intersection, torch.zeros_like(plane_x_intersection), torch.ones_like(plane_x_intersection)), 1)
-        source_intersection = self._is_touching_source(plane_intersection, new_rays_d.squeeze(-1))
-        ray_bundle.source_intersection = torch.matmul(self.transformations, source_intersection.unsqueeze(-1))[:,:-1].squeeze(-1)
+        plane_x_intersections, plane_y_intersections = self._intersect_with_plane(rays_o=new_rays_o, rays_d=new_rays_d)
+        plane_intersections = torch.cat((plane_x_intersections, plane_y_intersections, torch.zeros_like(plane_x_intersections), torch.ones_like(plane_x_intersections)), 1)
+        source_intersections = self._is_touching_source(plane_intersections, new_rays_d.squeeze(-1))
+        ray_bundle.source_intersections = torch.matmul(self.transformations, source_intersections.unsqueeze(-1))[:,:-1].squeeze(-1)
         return ray_bundle
 
     def forward(self, ray_bundle: RayBundle) -> RayBundle:
         """Set the source intersection coordinates in the source coordinate system (XoY plane)"""
-        if ray_bundle.source_intersection is not None:
+        if ray_bundle.source_intersections is not None:
             return ray_bundle
-        return self.set_source_intersection(ray_bundle)
+        return self.set_source_intersections(ray_bundle)
 
 class RectangleSourceCollider(SourceCollider):
     """Module for colliding rays with a rectangle planar source.
     """
 
-    def _is_touching_source(self, plane_intersection: torch.Tensor, rays_d: torch.Tensor):
-         plane_intersection[(torch.matmul(rays_d, self.normal) > 0) | (torch.abs(plane_intersection[:,0]) > self.X_size/2) | (torch.abs(plane_intersection[:,1]) > self.Y_size/2)] = torch.nan
-         return plane_intersection
+    def _is_touching_source(self, plane_intersections: torch.Tensor, rays_d: torch.Tensor):
+         plane_intersections[(torch.matmul(rays_d, self.normal) > 0) | (torch.abs(plane_intersections[:,0]) > self.X_size/2) | (torch.abs(plane_intersections[:,1]) > self.Y_size/2)] = torch.nan
+         return plane_intersections
 
 class EllipseSourceCollider(SourceCollider):
     """Module for colliding rays with an ellipse planar source.
     """
 
-    def _is_touching_source(self, plane_intersection: torch.Tensor, rays_d: torch.Tensor):
+    def _is_touching_source(self, plane_intersections: torch.Tensor, rays_d: torch.Tensor):
          self.normal = self.normal.to(device=rays_d.device)
-         plane_intersection[(torch.matmul(rays_d, self.normal) > 0) | (plane_intersection[:,0]**2 / (self.X_size/2)**2 + plane_intersection[:,1]**2 / (self.Y_size/2)**2 > 1)] = torch.nan
-         return plane_intersection
+         plane_intersections[(torch.matmul(rays_d, self.normal) > 0) | (plane_intersections[:,0]**2 / (self.X_size/2)**2 + plane_intersections[:,1]**2 / (self.Y_size/2)**2 > 1)] = torch.nan
+         return plane_intersections
 
 
 

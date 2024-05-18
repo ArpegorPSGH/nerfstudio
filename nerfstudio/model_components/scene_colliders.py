@@ -33,6 +33,15 @@ class SceneCollider(nn.Module):
         self.kwargs = kwargs
         super().__init__()
 
+    def intersect_with_source(self, ray_bundle: RayBundle) -> RayBundle:
+        if ray_bundle.source_intersections is not None:
+            origin_to_source = ray_bundle.source_intersections - ray_bundle.origins
+            source_distances = origin_to_source / ray_bundle.directions
+            source_distances = source_distances.mean(dim=-1).unsqueeze(-1)
+            ray_bundle.fars = ray_bundle.fars.where(source_distances > ray_bundle.fars, source_distances)
+            ray_bundle.source_distances = source_distances
+        return ray_bundle
+
     def set_nears_and_fars(self, ray_bundle: RayBundle) -> RayBundle:
         """To be implemented."""
         raise NotImplementedError
@@ -105,6 +114,7 @@ class AABBBoxCollider(SceneCollider):
         nears, fars = self._intersect_with_aabb(ray_bundle.origins, ray_bundle.directions, aabb)
         ray_bundle.nears = nears[..., None]
         ray_bundle.fars = fars[..., None]
+        ray_bundle = self.intersect_with_source(ray_bundle)
         return ray_bundle
 
 
@@ -162,6 +172,7 @@ class SphereCollider(SceneCollider):
         )
         ray_bundle.nears = nears
         ray_bundle.fars = fars
+        ray_bundle = self.intersect_with_source(ray_bundle)
         return ray_bundle
 
 
@@ -187,5 +198,6 @@ class NearFarCollider(SceneCollider):
         near_plane = self.near_plane if (self.training or not self.reset_near_plane) else 0
         ray_bundle.nears = ones * near_plane
         ray_bundle.fars = ones * self.far_plane
+        ray_bundle = self.intersect_with_source(ray_bundle)
         return ray_bundle
         

@@ -177,7 +177,6 @@ class SDFField(Field):
         self.return_initial_power = return_initial_power
 
         if self.return_initial_power:
-            self.source_collider = metadata["source_collider"]
             self.source_surface = metadata["source_surface"]
 
         self.mid_points = mid_points
@@ -412,10 +411,8 @@ class SDFField(Field):
         ) -> Float[Tensor, "num_samples ... 1"]:
         """compute initial powers of the rays"""
 
-        ray_bundle = self.source_collider(ray_bundle)
-
         # compute distance between end of ray and intersection with source
-        vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersection
+        vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersections
         distances = torch.linalg.vector_norm(vectors, dim=1)
 
         initial_power = self.source_power * self.pixel_size ** 2 / self.source_surface * torch.exp(-self.def_absorption * distances)

@@ -74,13 +74,25 @@ class SDFDataset(InputDataset):
             ray_indices = torch.flatten(ray_indices, end_dim=1).to(dtype=torch.int32)
             ray_bundle = self.train_ray_generator(ray_indices)
             ray_bundle = self.metadata["source_collider"](ray_bundle)
-            source_intersection = ray_bundle.source_intersection
-            mask = ~torch.isnan(source_intersection)
-            mask = mask.reshape(data["image"].shape)
+            ray_bundle = self.metadata["collider"](ray_bundle)
+            source_intersections = ray_bundle.source_intersections
+            source_shape_mask = ~torch.isnan(source_intersections)
+            source_shape_mask = source_shape_mask.reshape(data["image"].shape)
+
+            source_distances = ray_bundle.source_distances            
+            source_position_mask = torch.full(source_distances.shape, True)
+            source_position_mask[source_distances < ray_bundle.nears] = False
+            source_position_mask = source_position_mask.expand(-1, 3).reshape(data["image"].shape)
+
+            source_mask = source_shape_mask & source_position_mask
+
+            # check that at least one ray of the camera is useful
+            assert torch.any(source_mask), str(self.image_filenames[data["image_idx"]])+" has no useful pixels."
+
             if "mask" in data:
-                data["mask"] &= mask
+                data["mask"] &= source_mask
             else:
-                data["mask"] = mask
+                data["mask"] = source_mask
 
         return metadata
 

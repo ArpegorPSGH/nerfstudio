@@ -27,6 +27,7 @@ from nerfstudio.cameras import camera_utils
 from nerfstudio.cameras.cameras import Cameras, CameraType
 from nerfstudio.data.dataparsers.base_dataparser import DataParser, DataParserConfig, DataparserOutputs
 from nerfstudio.model_components.source_colliders import RectangleSourceCollider, EllipseSourceCollider
+from nerfstudio.model_components.scene_colliders import NearFarCollider, AABBBoxCollider, SphereCollider
 from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.utils.io import load_from_json
 
@@ -162,6 +163,16 @@ class SDFStudio(DataParser):
         if self.config.include_mono_prior:
             assert meta["has_mono_prior"], f"no mono prior in {self.config.data}"
 
+        collider_type = meta_scene_box["collider_type"]
+        if collider_type == 'near_far':
+            collider = NearFarCollider(near_plane=meta_scene_box["near"], far_plane=meta_scene_box["far"])
+        elif collider_type == 'box':
+            collider = AABBBoxCollider(scene_box)
+        elif collider_type == 'sphere':
+            collider = SphereCollider(center=meta_scene_box["center"], radius=meta_scene_box["radius"])
+        else:
+            raise NotImplementedError("collider type not implemented")
+
         if meta["source_shape"] == "RECTANGLE":
             source_collider = RectangleSourceCollider(X_size=meta["source_size_X"], 
                                                         Y_size=meta["source_size_Y"], 
@@ -193,9 +204,7 @@ class SDFStudio(DataParser):
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,
                 "include_mono_prior": self.config.include_mono_prior,
                 "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
-                "near": meta_scene_box["near"],
-                "far": meta_scene_box["far"],
-                "collider_type": meta_scene_box["collider_type"],
+                "collider": collider,
             },
         )
         return dataparser_outputs
