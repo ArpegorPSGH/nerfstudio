@@ -36,9 +36,10 @@ class SceneCollider(nn.Module):
     def intersect_with_source(self, ray_bundle: RayBundle) -> RayBundle:
         if ray_bundle.source_intersections is not None:
             origin_to_source = ray_bundle.source_intersections - ray_bundle.origins
-            source_distances = origin_to_source / ray_bundle.directions
-            source_distances = source_distances.mean(dim=-1).unsqueeze(-1)
-            ray_bundle.fars = ray_bundle.fars.where(source_distances > ray_bundle.fars, source_distances)
+            source_distances = torch.nan_to_num(origin_to_source / ray_bundle.directions, nan=torch.inf, neginf=torch.inf)
+            source_distances = source_distances.min(dim=-1, keepdim=True).values
+            fars = torch.nan_to_num(ray_bundle.fars)
+            ray_bundle.fars = ray_bundle.fars.where(source_distances > fars, source_distances)
             ray_bundle.source_distances = source_distances
         return ray_bundle
 
@@ -50,7 +51,7 @@ class SceneCollider(nn.Module):
         """Sets the nears and fars if they are not set already."""
         if ray_bundle.nears is not None and ray_bundle.fars is not None:
             return ray_bundle
-        return self.set_nears_and_fars(ray_bundle)
+        return self.intersect_with_source(self.set_nears_and_fars(ray_bundle))
 
 
 class AABBBoxCollider(SceneCollider):
@@ -76,25 +77,31 @@ class AABBBoxCollider(SceneCollider):
             rays_d: (num_rays, 3) ray directions
             aabb: (2, 3) This is [min point (x,y,z), max point (x,y,z)]
         """
-        # avoid divide by zero
-        dir_fraction = 1.0 / (rays_d + 1e-6)
-
+       
+        aabb = aabb.to(device=rays_o.device)
+        
         # x
-        t1 = (aabb[0, 0] - rays_o[:, 0:1]) * dir_fraction[:, 0:1]
-        t2 = (aabb[1, 0] - rays_o[:, 0:1]) * dir_fraction[:, 0:1]
+        t1 = (aabb[0, 0] - rays_o[:, 0:1]) / rays_d[:, 0:1]
+        t2 = (aabb[1, 0] - rays_o[:, 0:1]) / rays_d[:, 0:1]
         # y
-        t3 = (aabb[0, 1] - rays_o[:, 1:2]) * dir_fraction[:, 1:2]
-        t4 = (aabb[1, 1] - rays_o[:, 1:2]) * dir_fraction[:, 1:2]
+        t3 = (aabb[0, 1] - rays_o[:, 1:2]) / rays_d[:, 1:2]
+        t4 = (aabb[1, 1] - rays_o[:, 1:2]) / rays_d[:, 1:2]
         # z
-        t5 = (aabb[0, 2] - rays_o[:, 2:3]) * dir_fraction[:, 2:3]
-        t6 = (aabb[1, 2] - rays_o[:, 2:3]) * dir_fraction[:, 2:3]
+        t5 = (aabb[0, 2] - rays_o[:, 2:3]) / rays_d[:, 2:3]
+        t6 = (aabb[1, 2] - rays_o[:, 2:3]) / rays_d[:, 2:3]
 
         nears = torch.max(
-            torch.cat([torch.minimum(t1, t2), torch.minimum(t3, t4), torch.minimum(t5, t6)], dim=1), dim=1
+            torch.nan_to_num(torch.cat([torch.minimum(t1, t2), torch.minimum(t3, t4), torch.minimum(t5, t6)], dim=1), posinf=0), dim=1, keepdim=True
         ).values
         fars = torch.min(
-            torch.cat([torch.maximum(t1, t2), torch.maximum(t3, t4), torch.maximum(t5, t6)], dim=1), dim=1
+            torch.nan_to_num(torch.cat([torch.maximum(t1, t2), torch.maximum(t3, t4), torch.maximum(t5, t6)], dim=1), neginf=torch.inf), dim=1, keepdim=True
         ).values
+
+        intersections_nears = rays_o + nears*rays_d
+        intersections_fars = rays_o + fars*rays_d
+
+        nears[torch.any((intersections_nears < (aabb[0] - 1e-6)) | (intersections_nears > (aabb[1] + 1e-6)), dim=1)] = torch.nan
+        fars[torch.any((intersections_fars < (aabb[0] - 1e-6)) | (intersections_fars > (aabb[1] + 1e-6)), dim=1)] = torch.nan
 
         # clamp to near plane
         near_plane = self.near_plane if self.training else 0
@@ -112,9 +119,8 @@ class AABBBoxCollider(SceneCollider):
         """
         aabb = self.scene_box.aabb
         nears, fars = self._intersect_with_aabb(ray_bundle.origins, ray_bundle.directions, aabb)
-        ray_bundle.nears = nears[..., None]
-        ray_bundle.fars = fars[..., None]
-        ray_bundle = self.intersect_with_source(ray_bundle)
+        ray_bundle.nears = nears
+        ray_bundle.fars = fars
         return ray_bundle
 
 
@@ -172,7 +178,6 @@ class SphereCollider(SceneCollider):
         )
         ray_bundle.nears = nears
         ray_bundle.fars = fars
-        ray_bundle = self.intersect_with_source(ray_bundle)
         return ray_bundle
 
 
@@ -198,6 +203,5 @@ class NearFarCollider(SceneCollider):
         near_plane = self.near_plane if (self.training or not self.reset_near_plane) else 0
         ray_bundle.nears = ones * near_plane
         ray_bundle.fars = ones * self.far_plane
-        ray_bundle = self.intersect_with_source(ray_bundle)
         return ray_bundle
         
