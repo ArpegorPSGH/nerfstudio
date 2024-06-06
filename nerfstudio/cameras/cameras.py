@@ -918,8 +918,7 @@ class Cameras(TensorDataclass):
         else:
             metadata = {"directions_norm": directions_norm[0].detach()}
 
-        # correct float computation errors
-        origins = torch.round(origins, decimals=6)
+        # erase float computation errors
         directions = torch.round(directions, decimals=6)
 
         return RayBundle(

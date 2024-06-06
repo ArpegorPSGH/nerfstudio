@@ -74,7 +74,7 @@ class SDFDataset(InputDataset):
             ray_indices = torch.flatten(ray_indices, end_dim=1).to(dtype=torch.int32)
             ray_bundle = self.train_ray_generator(ray_indices)
             ray_bundle = self.metadata["source_collider"](ray_bundle)
-            ray_bundle = self.metadata["collider"](ray_bundle)
+            ray_bundle = self.metadata["collider"](ray_bundle, filter_out_nan=False)
             nears_mask = ~torch.isnan(ray_bundle.nears)
             fars_mask = ~torch.isnan(ray_bundle.fars)
             bbox_mask = nears_mask & fars_mask

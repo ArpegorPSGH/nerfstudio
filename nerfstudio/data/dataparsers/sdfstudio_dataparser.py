@@ -169,7 +169,7 @@ class SDFStudio(DataParser):
         elif collider_type == 'box':
             collider = AABBBoxCollider(scene_box)
         elif collider_type == 'sphere':
-            collider = SphereCollider(center=meta_scene_box["center"], radius=meta_scene_box["radius"])
+            collider = SphereCollider(center=torch.Tensor(meta_scene_box["center"]), radius=meta_scene_box["radius"])
         else:
             raise NotImplementedError("collider type not implemented")
 

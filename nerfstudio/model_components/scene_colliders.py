@@ -43,15 +43,15 @@ class SceneCollider(nn.Module):
             ray_bundle.source_distances = source_distances
         return ray_bundle
 
-    def set_nears_and_fars(self, ray_bundle: RayBundle) -> RayBundle:
+    def set_nears_and_fars(self, ray_bundle: RayBundle, filter_out_nan: bool) -> RayBundle:
         """To be implemented."""
         raise NotImplementedError
 
-    def forward(self, ray_bundle: RayBundle) -> RayBundle:
+    def forward(self, ray_bundle: RayBundle, filter_out_nan: bool = True) -> RayBundle:
         """Sets the nears and fars if they are not set already."""
         if ray_bundle.nears is not None and ray_bundle.fars is not None:
             return ray_bundle
-        return self.intersect_with_source(self.set_nears_and_fars(ray_bundle))
+        return self.intersect_with_source(self.set_nears_and_fars(ray_bundle, filter_out_nan=filter_out_nan))
 
 
 class AABBBoxCollider(SceneCollider):
@@ -110,7 +110,7 @@ class AABBBoxCollider(SceneCollider):
 
         return nears, fars
 
-    def set_nears_and_fars(self, ray_bundle: RayBundle) -> RayBundle:
+    def set_nears_and_fars(self, ray_bundle: RayBundle, filter_out_nan: bool) -> RayBundle:
         """Intersects the rays with the scene box and updates the near and far values.
         Populates nears and fars fields and returns the ray_bundle.
 
@@ -140,7 +140,7 @@ class SphereCollider(SceneCollider):
         self.near_plane = near_plane
 
     def _intersect_with_sphere(self,
-        rays_o: torch.Tensor, rays_d: torch.Tensor, center: torch.Tensor, radius: float = 1.0, near_plane: float = 0.0
+        rays_o: torch.Tensor, rays_d: torch.Tensor, center: torch.Tensor, filter_out_nan: bool, radius: float = 1.0, near_plane: float = 0.0
     ):
         a = (rays_d * rays_d).sum(dim=-1, keepdim=True)
         b = 2 * (rays_o - center) * rays_d
@@ -148,19 +148,20 @@ class SphereCollider(SceneCollider):
         c = (rays_o - center) * (rays_o - center)
         c = c.sum(dim=-1, keepdim=True) - radius**2
 
+        delta = torch.square(b) - 4 * a * c
+        if filter_out_nan:
+            # replace negative values with 0s
+            delta = torch.maximum(torch.zeros_like(delta), delta)
+
+        nears = (-b - torch.sqrt(delta)) / (2 * a)
+        fars = (-b + torch.sqrt(delta)) / (2 * a)
         # clamp to near plane
-        nears = (-b - torch.sqrt(torch.square(b) - 4 * a * c)) / (2 * a)
-        fars = (-b + torch.sqrt(torch.square(b) - 4 * a * c)) / (2 * a)
-
         nears = torch.clamp(nears, min=near_plane)
-        fars = torch.maximum(fars, nears + 1e-6)
-
-        nears = torch.nan_to_num(nears, nan=0.0)
-        fars = torch.nan_to_num(fars, nan=0.0)
+        fars = torch.maximum(fars, nears + 1e-6)  
 
         return nears, fars
 
-    def set_nears_and_fars(self, ray_bundle: RayBundle) -> RayBundle:
+    def set_nears_and_fars(self, ray_bundle: RayBundle, filter_out_nan: bool) -> RayBundle:
         """Intersects the rays with the scene box and updates the near and far values.
         Populates nears and fars fields and returns the ray_bundle.
 
@@ -175,6 +176,7 @@ class SphereCollider(SceneCollider):
             center=self.center,
             radius=self.radius,
             near_plane=near_plane,
+            filter_out_nan=filter_out_nan
         )
         ray_bundle.nears = nears
         ray_bundle.fars = fars
@@ -198,7 +200,7 @@ class NearFarCollider(SceneCollider):
         self.reset_near_plane = reset_near_plane
         super().__init__(**kwargs)
 
-    def set_nears_and_fars(self, ray_bundle: RayBundle) -> RayBundle:
+    def set_nears_and_fars(self, ray_bundle: RayBundle, filter_out_nan: bool) -> RayBundle:
         ones = torch.ones_like(ray_bundle.origins[..., 0:1])
         near_plane = self.near_plane if (self.training or not self.reset_near_plane) else 0
         ray_bundle.nears = ones * near_plane
