@@ -160,7 +160,7 @@ class SDFField(Field):
         mid_points: bool = False,
         return_absorption: bool = False,
         def_absorption: float = 0,
-        source_power: float = 1,
+        source_collider: SourceCollider = None,
         pixel_size: float = 1,
         field_scaling: float = 1,
     ) -> None:
@@ -176,13 +176,10 @@ class SDFField(Field):
         self.config.beta_init = beta_init
         self.return_initial_power = return_initial_power
 
-        if self.return_initial_power:
-            self.source_surface = metadata["source_surface"]
-
         self.mid_points = mid_points
         self.return_absorption = return_absorption
         self.def_absorption = def_absorption
-        self.source_power = source_power
+        self.source_collider = source_collider
         self.pixel_size = pixel_size
         self.field_scaling = field_scaling
 
@@ -405,20 +402,6 @@ class SDFField(Field):
         absorption = (mat_absorption - self.def_absorption) / (1 + torch.exp(exponent)) + self.def_absorption
         return absorption
 
-    def get_initial_power(
-            self,
-            ray_bundle: RayBundle,
-        ) -> Float[Tensor, "num_samples ... 1"]:
-        """compute initial powers of the rays"""
-
-        # compute distance between end of ray and intersection with source
-        vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersections
-        distances = torch.linalg.vector_norm(vectors, dim=1)
-
-        initial_power = self.source_power * self.pixel_size ** 2 / self.source_surface * torch.exp(-self.def_absorption * distances)
-
-        return torch.nan_to_num(initial_power).unsqueeze(-1)
-
     def get_colors(
         self,
         points: Float[Tensor, "*batch 3"],
@@ -530,7 +513,7 @@ class SDFField(Field):
             outputs.update({FieldHeadNames.ABSORPTION: absorption})
 
         if self.return_initial_power:
-            initial_power = self.get_initial_power(ray_bundle)
+            initial_power = self.source_collider.get_rays_init_power(ray_bundle, self.def_absorption, self.pixel_size)
             outputs.update({FieldHeadNames.POWER: initial_power})
 
         return outputs

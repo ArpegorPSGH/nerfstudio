@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor, nn
+import numpy as np
 
 from nerfstudio.cameras.rays import RayBundle
 
@@ -33,14 +34,20 @@ class SourceCollider(nn.Module):
         transformations: transformations of source
     """
 
-    def __init__(self, X_size: float, Y_size: float, transformations: torch.Tensor, **kwargs) -> None:
+    def __init__(self, X_size: float, Y_size: float, transformations: torch.Tensor, source_power: float, **kwargs) -> None:
         self.X_size = X_size
         self.Y_size = Y_size
         self.normal = torch.Tensor([0, 0, 1])
         self.transformations = transformations
         self.inv_transformations = torch.linalg.inv(transformations)
+        self.source_power = source_power
+        self.source_surface = self._compute_source_surface()
         super().__init__(**kwargs)
 
+    def _compute_source_surface(self):
+        """To be implemented."""
+        raise NotImplementedError
+    
     def _transform_rays(self, rays_o: torch.Tensor, rays_d: torch.Tensor):
         self.transformations = self.transformations.to(device=rays_o.device)
         self.inv_transformations = self.inv_transformations.to(device=rays_o.device)
@@ -65,6 +72,16 @@ class SourceCollider(nn.Module):
         ray_bundle.source_intersections = torch.matmul(self.transformations, source_intersections.unsqueeze(-1))[:,:-1].squeeze(-1)
         return ray_bundle
 
+    def get_rays_init_power(self,  ray_bundle: RayBundle, def_absorption: float, pixel_size: float):
+        """Function to compute power on any point of the source"""
+        # compute distance between end of ray and intersection with source
+        vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersections
+        distances = torch.linalg.vector_norm(vectors, dim=1)
+
+        initial_power = self.source_power * pixel_size ** 2 / self.source_surface * torch.exp(-def_absorption * distances)
+
+        return initial_power.unsqueeze(-1)
+    
     def forward(self, ray_bundle: RayBundle) -> RayBundle:
         """Set the source intersection coordinates in the source coordinate system (XoY plane)"""
         if ray_bundle.source_intersections is not None:
@@ -74,6 +91,9 @@ class SourceCollider(nn.Module):
 class RectangleSourceCollider(SourceCollider):
     """Module for colliding rays with a rectangle planar source.
     """
+    
+    def _compute_source_surface(self):
+        return self.X_size * self.Y_size
 
     def _is_touching_source(self, plane_intersections: torch.Tensor, rays_d: torch.Tensor):
          plane_intersections[(torch.matmul(rays_d, self.normal) > 0) | (torch.abs(plane_intersections[:,0]) > self.X_size/2) | (torch.abs(plane_intersections[:,1]) > self.Y_size/2)] = torch.nan
@@ -82,6 +102,9 @@ class RectangleSourceCollider(SourceCollider):
 class EllipseSourceCollider(SourceCollider):
     """Module for colliding rays with an ellipse planar source.
     """
+
+    def _compute_source_surface(self):
+        return np.pi * self.X_size/2 *self.Y_size/2
 
     def _is_touching_source(self, plane_intersections: torch.Tensor, rays_d: torch.Tensor):
          self.normal = self.normal.to(device=rays_d.device)

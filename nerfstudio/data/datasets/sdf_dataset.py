@@ -22,6 +22,7 @@ from typing import Dict
 import numpy as np
 import torch
 from torch import Tensor
+import cv2
 
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.datasets.base_dataset import InputDataset
@@ -73,7 +74,8 @@ class SDFDataset(InputDataset):
             ray_indices = torch.dstack([camera_indices, pixel_indices_X, pixel_indices_Y])
             ray_indices = torch.flatten(ray_indices, end_dim=1).to(dtype=torch.int32)
             ray_bundle = self.train_ray_generator(ray_indices)
-            ray_bundle = self.metadata["source_collider"](ray_bundle)
+            source_collider = self.metadata["source_collider"]
+            ray_bundle = source_collider(ray_bundle)
             ray_bundle = self.metadata["collider"](ray_bundle, filter_out_nan=False)
             nears_mask = ~torch.isnan(ray_bundle.nears)
             fars_mask = ~torch.isnan(ray_bundle.fars)
@@ -89,9 +91,22 @@ class SDFDataset(InputDataset):
             source_position_mask[source_distances < ray_bundle.nears + 1e-6] = False
             source_position_mask = source_position_mask.expand(-1, 3).reshape(data["image"].shape)
 
+            rays_init_power = source_collider.get_rays_init_power(ray_bundle, self.metadata["def_absorption"], self.metadata["pixel_size"])
+            image = torch.mean(torch.tensor(data["image"]), dim=-1)
+            pixel_resolution = 1/(2**torch.min(torch.tensor(data["bit_depth"]))-1).reshape(-1,1)
+            rays_init_power = rays_init_power.reshape(data["image"].shape[:-1])
+            rays_init_intensity = rays_init_power * 0.444444 / self.metadata["pixel_size"]**2
+
+            # check that theoretical initial power computed and image power measured are compatible
+            assert torch.all(torch.nan_to_num(rays_init_intensity, nan=1) >= image - pixel_resolution/2), str(self.image_filenames[data["image_idx"]])+" has at least a pixel incompatible with source theroretical power."
+            object_mask = rays_init_intensity > image + pixel_resolution/2
+            object_mask = cv2.dilate(np.array(object_mask*255, np.uint8),np.ones((3,3), np.uint8),iterations=self.metadata["boundary_thickness"])
+            object_mask = torch.tensor(object_mask/255, dtype=torch.bool).unsqueeze(-1).expand(-1,-1, 3)
+
+
             source_mask = source_shape_mask & source_position_mask
 
-            final_mask = bbox_mask & source_mask
+            final_mask = bbox_mask & source_mask & object_mask
 
             # check that at least one ray of the camera is useful
             assert torch.any(final_mask), str(self.image_filenames[data["image_idx"]])+" has no useful pixels."

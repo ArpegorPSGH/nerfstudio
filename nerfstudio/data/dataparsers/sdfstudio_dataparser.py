@@ -19,7 +19,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Type
-import numpy as np
 
 import torch
 
@@ -176,13 +175,13 @@ class SDFStudio(DataParser):
         if meta["source_shape"] == "RECTANGLE":
             source_collider = RectangleSourceCollider(X_size=meta["source_size_X"], 
                                                         Y_size=meta["source_size_Y"], 
-                                                        transformations=torch.Tensor(meta["source_transformations"]))
-            source_surface = meta["source_size_X"] * meta["source_size_Y"]
+                                                        transformations=torch.Tensor(meta["source_transformations"]),
+                                                        source_power=meta["source_power"])
         elif meta["source_shape"] == "ELLIPSE":
             source_collider = EllipseSourceCollider(X_size=meta["source_size_X"], 
                                                     Y_size=meta["source_size_Y"], 
-                                                    transformations=torch.Tensor(meta["source_transformations"]))
-            source_surface = np.pi * meta["source_size_X"]/2 * meta["source_size_Y"]/2
+                                                    transformations=torch.Tensor(meta["source_transformations"]),
+                                                    source_power=meta["source_power"])
         else:
             raise NotImplementedError
 
@@ -196,10 +195,10 @@ class SDFStudio(DataParser):
                 "transform": transform,
                 "sdf_field_scaling": meta["sdffieldscaling"],
                 "material_absorption_coef_init": meta["material_absorption_coef"],
-                "source_power": meta["source_power"],
                 "source_collider": source_collider,
-                "source_surface": source_surface,
                 "pixel_size": meta["pixel_size"],
+                "def_absorption": meta["def_absorption"],
+                "boundary_thickness": meta["boundary_thickness"],
                 # required for normal maps, these are in colmap format so they require c2w before conversion
                 "camera_to_worlds": c2w_colmap if len(c2w_colmap) > 0 else None,
                 "include_mono_prior": self.config.include_mono_prior,

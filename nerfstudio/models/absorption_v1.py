@@ -55,10 +55,6 @@ class AbsorptionModelConfig(VolumeModelConfig):
     """Absorption constant of the object's material""" #as close as possible to real value, while avoiding saturating pixels to 0 or 1
     def_absorption: float = 0
     """Absorption constant outside of the object"""
-    source_power: float = 1
-    """Total power of the ray source"""
-    pixel_size: float = 1
-    """Pixel size of the sensor"""
 
 
 class AbsorptionModel(VolumeModel):
@@ -81,11 +77,11 @@ class AbsorptionModel(VolumeModel):
             base_variance=self.config.init_variance,
         )
 
-        self.def_absorption = self.config.def_absorption
         metadata = self.kwargs["metadata"]
-        self.source_power = metadata["source_power"]
-        self.pixel_size = metadata["pixel_size"]
+        self.def_absorption = metadata["def_absorption"]
         self.field_scaling = metadata["sdf_field_scaling"]
+        self.source_collider = metadata["source_collider"]
+        self.pixel_size = metadata["pixel_size"]
 
         # Can we also use contraction for sdf?
         # Fields
@@ -100,7 +96,7 @@ class AbsorptionModel(VolumeModel):
             mid_points=True,
             return_absorption=True,
             def_absorption=self.def_absorption,
-            source_power=self.source_power,
+            source_collider=self.source_collider,
             pixel_size=self.pixel_size,
             field_scaling=self.field_scaling
         )
