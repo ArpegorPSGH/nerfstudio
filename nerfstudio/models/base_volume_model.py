@@ -114,7 +114,8 @@ class VolumeModel(Model):
         pixel_resolution = 1/(2**torch.min(batch["bit_depths"])-1).reshape(-1,1)
         pred_image = outputs["rgb"]
         init_intensity = outputs["initial_intensity"]
-        loss_dict["rgb_loss"] = self.absorption_loss(image, pred_image, init_intensity, pixel_resolution)
+        loss_weights = self.get_loss_weights(init_intensity, image, pixel_resolution)
+        loss_dict["rgb_loss"] = self.absorption_loss(image, pred_image, init_intensity, pixel_resolution, loss_weights)
         print("rgb_loss :", loss_dict["rgb_loss"])
         if self.training:
             # eikonal loss
@@ -124,7 +125,19 @@ class VolumeModel(Model):
 
         return loss_dict
 
-    def absorption_loss(self, image, pred_image, init_intensity, pixel_resolution):
+    def get_loss_weights(self, init_intensity, image, pixel_resolution):
+        object_mask = init_intensity > image + pixel_resolution/2
+        num_rays = torch.numel(object_mask)
+        num_object_rays = torch.count_nonzero(object_mask)
+        num_empty_rays = num_rays - num_object_rays
+        if num_empty_rays > 0 and num_object_rays > 0:
+            loss_weights = torch.where(object_mask, num_empty_rays, num_object_rays)
+            loss_weights = loss_weights/loss_weights.sum()*num_rays
+        else:
+            loss_weights = torch.ones_like(object_mask)
+        return loss_weights
+
+    def absorption_loss(self, image, pred_image, init_intensity, pixel_resolution, loss_weights):
         init_intensity = torch.maximum(init_intensity, torch.max(image))
         pred_image = torch.clip(pred_image, torch.zeros_like(pred_image), init_intensity)
         resolution = torch.tensor(torch.finfo(pred_image.dtype).resolution)
@@ -132,6 +145,7 @@ class VolumeModel(Model):
         pred_image_absorption = torch.log(torch.minimum(torch.maximum(pred_image, resolution), init_intensity-resolution)/init_intensity)
         print(image_absorption.mean(), pred_image_absorption.mean())
         loss = torch.maximum(image_absorption/pred_image_absorption, pred_image_absorption/image_absorption)**0.01-1
+        loss *= loss_weights
         loss = loss.mean()
         return loss
 

@@ -47,7 +47,7 @@ class PixelSamplerConfig(InstantiateConfig):
     """Set to the radius (in pixels) for fisheye cameras."""
     rejection_sample_mask: bool = True
     """Whether or not to use rejection sampling when sampling images with masks"""
-    max_num_iterations: int = 100
+    max_num_iterations: int = 10000
     """If rejection sampling masks, the maximum number of times to sample"""
 
 
