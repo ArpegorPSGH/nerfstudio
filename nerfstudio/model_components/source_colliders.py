@@ -73,7 +73,7 @@ class SourceCollider(nn.Module):
         return ray_bundle
 
     def get_rays_init_power(self,  ray_bundle: RayBundle, def_absorption: float, pixel_size: float):
-        """Function to compute power on any point of the source"""
+        """Function to compute power from any point of the source at any ray end"""
         # compute distance between end of ray and intersection with source
         vectors = ray_bundle.get_rays_ends() - ray_bundle.source_intersections
         distances = torch.linalg.vector_norm(vectors, dim=1)

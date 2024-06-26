@@ -94,12 +94,13 @@ class SDFDataset(InputDataset):
             rays_init_power = source_collider.get_rays_init_power(ray_bundle, self.metadata["def_absorption"], self.metadata["pixel_size"])
             image = torch.mean(torch.tensor(data["image"]), dim=-1)
             pixel_resolution = 1/(2**torch.min(torch.tensor(data["bit_depth"]))-1).reshape(-1,1)
-            rays_init_power = rays_init_power.reshape(data["image"].shape[:-1])
-            rays_init_intensity = rays_init_power * 0.444444 / self.metadata["pixel_size"]**2
+            rays_init_power_on_camera = rays_init_power*torch.exp(-ray_bundle.fars*self.metadata["def_absorption"])
+            rays_init_power_on_camera = rays_init_power_on_camera.reshape(data["image"].shape[:-1])
+            rays_init_intensity_on_camera = rays_init_power_on_camera * 0.444444 / self.metadata["pixel_size"]**2
 
             # check that theoretical initial power computed and image power measured are compatible
-            assert torch.all(torch.nan_to_num(rays_init_intensity, nan=1) >= image - pixel_resolution/2), str(self.image_filenames[data["image_idx"]])+" has at least a pixel incompatible with source theroretical power."
-            object_mask = rays_init_intensity > image + pixel_resolution/2
+            assert torch.all(torch.nan_to_num(rays_init_intensity_on_camera, nan=1) >= image - pixel_resolution/2), str(self.image_filenames[data["image_idx"]])+" has at least a pixel incompatible with source theroretical power."
+            object_mask = rays_init_intensity_on_camera > image + pixel_resolution/2
             object_mask = cv2.dilate(np.array(object_mask*255, np.uint8),np.ones((3,3), np.uint8),iterations=self.metadata["boundary_thickness"])
             object_mask = torch.tensor(object_mask/255, dtype=torch.bool).unsqueeze(-1).expand(-1,-1, 3)
 

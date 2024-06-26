@@ -455,6 +455,8 @@ class AbsorptionRenderer(nn.Module):
         initial_power: Float[Tensor, "*bs num_samples 1"],
         absorption: Float[Tensor, "*bs num_samples 1"],
         samples_width: Float[Tensor, "*bs num_samples 1"],
+        default_absorption: float,
+        near: Float[Tensor, "*bs num_samples 1"]
     ) -> Float[Tensor, "*bs 3"]:
         """Composite samples along ray and render power image
 
@@ -462,12 +464,14 @@ class AbsorptionRenderer(nn.Module):
             initial_power: Initial power for each sample
             absorption: Absorption for each sample
             samples_width: Size of each sample along ray
+            default_absorption: Absorption for empty space
+            near: Sampling start distance
 
         Returns:
             Outputs of power values.
         """
 
-        power = initial_power * torch.exp(-torch.sum(absorption * samples_width, dim=1))
+        power = initial_power * torch.exp(-torch.sum(absorption * samples_width, dim=1) - default_absorption * near)
 
         # print("min absorption", torch.min(torch.sum(absorption * samples_width, dim=1)), "max absorption", torch.max(torch.sum(absorption * samples_width, dim=1)), "mean absorption", torch.mean(torch.sum(absorption * samples_width, dim=1)))
         return power

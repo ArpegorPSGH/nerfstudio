@@ -64,9 +64,10 @@ class VolumeModel(Model):
         super().populate_modules()
         self.scene_contraction = SceneContraction(order=float("inf"))
 
-        self.init_mat_absorption = self.kwargs["metadata"]["material_absorption_coef_init"]
-        self.collider = self.kwargs["metadata"]["collider"]
-        self.source_collider = self.kwargs["metadata"]["source_collider"]
+        self.metadata = self.kwargs["metadata"]
+        self.init_mat_absorption = self.metadata["material_absorption_coef_init"]
+        self.collider = self.metadata["collider"]
+        self.source_collider = self.metadata["source_collider"]
         
          # dummy background model
         self.field_background = Parameter(torch.ones(1), requires_grad=False)
@@ -175,7 +176,9 @@ class VolumeModel(Model):
         power = self.renderer_absorption(
             initial_power=field_outputs[FieldHeadNames.POWER],
             absorption=field_outputs[FieldHeadNames.ABSORPTION],
-            samples_width=ray_samples.deltas
+            samples_width=ray_samples.deltas,
+            near=ray_bundle.nears,
+            default_absorption=self.metadata["def_absorption"]
         )
 
         # convert power to intensity
